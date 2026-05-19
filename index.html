@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>NOSCOPE Generator V24.0 (Pro Masking)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    :root {
+      --c-bg: #020617;
+      --c-panel: #0f172a;
+      --c-border: #1e293b;
+      --c-primary: #A700FF;
+      --c-highlight: #cd71fe;
+      --c-text: #e2e8f0;
+      --c-text-muted: #94a3b8;
+      --radius: 12px;
+      --font-main: "Source Sans 3", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    
+    body {
+      margin: 0; padding: 0; height: 100vh;
+      font-family: var(--font-main);
+      background: var(--c-bg); color: var(--c-text);
+      display: flex; overflow: hidden;
+      user-select: none;
+    }
+
+    /* LAYOUT */
+    .app-container { display: flex; width: 100%; height: 100%; }
+    
+    .sidebar {
+      width: 360px; min-width: 360px;
+      background: var(--c-panel);
+      border-right: 1px solid var(--c-border);
+      display: flex; flex-direction: column;
+      z-index: 100;
+      position: relative;
+      overflow-y: auto;
+    }
+    .sidebar-right { border-left: 1px solid var(--c-border); border-right: none; }
+
+    .header {
+      padding: 16px 20px; border-bottom: 1px solid var(--c-border);
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(15, 23, 42, 0.95); position: sticky; top: 0; z-index: 110;
+    }
+    .brand-mark { width: 10px; height: 10px; background: var(--c-primary); border-radius: 2px; box-shadow: 0 0 10px var(--c-primary); }
+    .header h1 { margin: 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .scroll-content { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+
+    .control-group {
+      background: rgba(255,255,255,0.02); padding: 16px;
+      border-radius: var(--radius); border: 1px solid var(--c-border);
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .group-title {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+      color: #cd71fe; font-weight: 700; margin-bottom: 4px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    /* UI ELEMENTS */
+    .row { display: flex; gap: 12px; align-items: center; }
+    .row-label { width: 60px; font-size: 12px; color: var(--c-text-muted); flex-shrink: 0; }
+    
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      flex: 1; height: 6px; background: #334155;
+      border-radius: 99px; outline: none; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--c-primary); border: 2px solid #fff; margin-top: -1px; 
+    }
+    input[type="number"] { width: 60px; background: #020617; border: 1px solid var(--c-border); color: white; border-radius: 6px; padding: 6px; font-size: 12px; text-align: right; }
+    input[type="color"] { background: none; border: none; width: 30px; height: 30px; cursor: pointer; }
+    textarea { width: 100%; min-height: 100px; background: #020617; border: 1px solid var(--c-border); border-radius: 8px; padding: 12px; color: white; font-family: inherit; resize: vertical; outline: none; }
+    select { width: 100%; padding: 10px; background: #020617; color: white; border: 1px solid var(--c-border); border-radius: 8px; cursor: pointer; }
+
+    .btn { width: 100%; padding: 12px; border-radius: 8px; border: none; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
+    .btn-primary { background: linear-gradient(135deg, var(--c-primary), #7c00be); color: white; }
+    .btn-secondary { background: rgba(255,255,255,0.05); color: white; border: 1px solid rgba(255,255,255,0.1); }
+    .btn.active-tool { background: var(--c-primary); color: white; border-color: var(--c-primary); }
+    .icon-btn { background: none; border: none; color: var(--c-text-muted); cursor: pointer; padding: 4px; }
+    .icon-btn:hover { color: white; }
+
+    /* LAYERS */
+    .layer-list { display: flex; flex-direction: column; gap: 6px; }
+    .layer-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px;
+      background: #1e293b; border: 1px solid transparent; border-radius: 8px;
+      cursor: grab; user-select: none; transition: transform 0.2s;
+    }
+    .layer-item.active { background: #281a38; border-color: var(--c-primary); }
+    .layer-item.dragging { opacity: 0.5; border: 1px dashed #fff; }
+    .layer-thumb { width: 32px; height: 32px; background: #000; border-radius: 4px; object-fit: cover; pointer-events: none; }
+    
+    /* CANVAS */
+    .main-area {
+      flex: 1; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;
+      background-image: linear-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: 1; 
+    }
+    .preview-viewport {
+      width: 576px; height: 720px; background: #050505;
+      box-shadow: 0 0 50px rgba(0,0,0,0.8); position: relative; overflow: hidden;
+    }
+    #realCanvas {
+      width: 1440px; height: 1800px; background: #000; position: absolute; top: 0; left: 0;
+      transform: scale(0.4); transform-origin: top left; pointer-events: auto;
+    }
+    
+    #layersRoot { position: absolute; inset: 0; z-index: 10; }
+    .layer-div { position: absolute; top: 0; left: 0; transform-origin: center center; cursor: grab; }
+    .layer-div:active { cursor: grabbing; }
+    
+    #maskOverlay { position: absolute; inset: 0; pointer-events: none; z-index: 1000; }
+    .overlay-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2000; }
+    #overlayImage { width: 100%; height: 100%; object-fit: cover; }
+    
+    #headlinePreview {
+      position: absolute; z-index: 99999; pointer-events: none;
+      left: 75px; bottom: 241px; right: 40px;
+      font-family: var(--font-main); font-weight: 500; font-size: 87px; line-height: 1.1; 
+      white-space: pre-wrap; color: white; text-align: left;
+    }
+    #headlinePreview span { pointer-events: auto; cursor: pointer; }
+
+    #brushCursor {
+      position: fixed; pointer-events: none; border: 1px solid rgba(255,255,255,0.9); background: rgba(167,0,255,0.2);
+      border-radius: 50%; z-index: 99999; transform: translate(-50%, -50%); display: none;
+    }
+
+    /* CURSORS */
+    .tool-move #realCanvas { cursor: move; }
+    .tool-mask #realCanvas { cursor: crosshair; }
+    .tool-erase #realCanvas { cursor: none; }
+
+    .bottom-bar {
+      position: absolute; bottom: 30px; display: flex; justify-content: center; width: 100%; pointer-events: none; z-index: 200;
+    }
+    .download-pill {
+      pointer-events: auto; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px);
+      padding: 10px; border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .download-btn {
+      background: linear-gradient(135deg, var(--c-primary), #7c00be); color: white; border: none; padding: 12px 30px; border-radius: 10px; font-weight: 700; cursor: pointer;
+    }
+
+    /* TOGGLE */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+    .toggle-row.active { border-color: var(--c-primary); background: rgba(167,0,255,0.1); }
+    .toggle-check { width: 16px; height: 16px; border: 2px solid #555; border-radius: 4px; }
+    .toggle-row.active .toggle-check { background: var(--c-primary); border-color: var(--c-primary); }
+
+    /* CHIPS */
+    #wordControls { display: flex; flex-wrap: wrap; gap: 6px; }
+    .word-chip { padding: 4px 10px; border-radius: 99px; background: rgba(255,255,255,0.05); border: 1px solid var(--c-border); font-size: 11px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <div id="brushCursor"></div>
+  <input type="file" id="layerInput" accept="image/*" style="display:none;" />
+
+  <div class="app-container">
+    
+    <aside class="sidebar">
+      <div class="header">
+        <div class="brand-mark"></div>
+        <h1>Layers & Tools</h1>
+      </div>
+      <div class="scroll-content">
+        <button class="btn btn-primary" id="addLayerBtn"><i class="ph ph-plus-circle"></i> Add Image</button>
+        
+        <div class="control-group">
+          <div class="group-title">Layer Stack</div>
+          <div class="layer-list" id="layerListUi">
+            <div style="padding:15px; text-align:center; color:gray; font-size:12px;">No images</div>
+          </div>
+        </div>
+
+        <div id="layerProperties" style="display:none; flex-direction:column; gap:20px;">
+          
+          <div class="control-group">
+            <div class="group-title">Tools 
+                <div style="display:flex; gap:5px;">
+                    <button class="icon-btn" onclick="duplicateLayer()" title="Duplicate"><i class="ph ph-copy"></i></button>
+                    <button class="icon-btn" onclick="deleteLayer(state.activeId, event)" title="Delete"><i class="ph ph-trash" style="color:#f87171"></i></button>
+                </div>
+            </div>
+            <div style="display:flex; gap:5px;">
+              <button id="toolMove" class="btn btn-secondary active-tool" style="flex:1" onclick="setTool('move')"><i class="ph ph-arrows-out-cardinal"></i> Move</button>
+              <button id="toolErase" class="btn btn-secondary" style="flex:1" onclick="setTool('erase')"><i class="ph ph-eraser"></i> Erase</button>
+              <button id="toolMask" class="btn btn-secondary" style="flex:1" onclick="setTool('mask')"><i class="ph ph-crop"></i> Mask</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+             <div class="toggle-row" id="bwToggle" onclick="toggleBW()">
+                <span style="font-size:12px; font-weight:600; color:#e2e8f0;">Black & White</span>
+                <div class="toggle-check"></div>
+             </div>
+          </div>
+
+          <div id="maskSettings" class="control-group" style="display:none;">
+             <div class="group-title">
+                Mask Shape
+                <button class="icon-btn" onclick="removeMask()"><i class="ph ph-x"></i></button>
+             </div>
+             <div style="display:flex; gap:5px; margin-bottom:10px;">
+               <button id="maskCircle" class="btn btn-secondary" style="flex:1" onclick="setMaskShape('circle')"><i class="ph ph-circle"></i></button>
+               <button id="maskRect" class="btn btn-secondary" style="flex:1" onclick="setMaskShape('rect')"><i class="ph ph-square"></i></button>
+               <button id="maskPen" class="btn btn-secondary" style="flex:1" onclick="setMaskShape('pen')"><i class="ph ph-pen-nib"></i></button>
+             </div>
+             
+             <div style="font-size:11px; color:#94a3b8; margin-bottom:10px;" id="maskInstructions">
+               Drag on canvas to create mask.
+             </div>
+
+             <div class="row"><span class="row-label">Softness</span><input id="maskSoft" type="range" min="0" max="300" value="0"><input id="maskSoftNum" type="number" value="0"></div>
+             <div class="row"><span class="row-label">Stroke</span><input id="maskStroke" type="range" min="0" max="50" value="0"><input id="maskStrokeNum" type="number" value="0"></div>
+             <div class="row"><span class="row-label">Color</span><input id="maskColor" type="color" value="#ffffff" style="flex:0;"></div>
+             <button class="btn" style="background:rgba(220,38,38,0.2); color:#f87171; margin-top:10px;" onclick="removeMask()">Remove Mask</button>
+          </div>
+
+          <div id="eraserSettings" class="control-group" style="display:none;">
+             <div class="group-title">Eraser Mode</div>
+             <div style="display:flex; gap:5px; margin-bottom:10px;">
+               <button id="modeRemove" class="btn btn-secondary" style="flex:1; font-size:11px;" onclick="setEraseMode('remove')">Remove</button>
+               <button id="modeRestore" class="btn btn-secondary" style="flex:1; font-size:11px;" onclick="setEraseMode('restore')">Restore</button>
+             </div>
+             <div class="row"><span class="row-label">Size</span><input id="eraseSize" type="range" min="10" max="200" value="80"><input id="eraseSizeNum" type="number" value="80"></div>
+             <div class="row"><span class="row-label">Softness</span><input id="eraseSoft" type="range" min="0" max="100" value="50"><input id="eraseSoftNum" type="number" value="50"></div>
+          </div>
+
+          <div class="control-group">
+            <div class="group-title">Image Transform</div>
+            <div class="row"><span class="row-label">Zoom</span><input id="layerScale" type="range" min="10" max="400" value="100"><input id="layerScaleNum" type="number" value="100"></div>
+            <div class="row"><span class="row-label">Rotate</span><input id="layerRot" type="range" min="-180" max="180" value="0"><input id="layerRotNum" type="number" value="0"></div>
+            <div class="row"><span class="row-label">Opacity</span><input id="layerOpacity" type="range" min="0" max="100" value="100"><input id="layerOpacityNum" type="number" value="100"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <div class="preview-viewport tool-move" id="viewportRoot">
+        <div id="realCanvas">
+          <div id="layersRoot"></div>
+          <canvas id="maskOverlay" width="1440" height="1800"></canvas>
+          <div class="overlay-layer">
+            <img id="overlayImage" src="overlay.png" alt="Overlay" onerror="this.style.display='none'"/>
+          </div>
+          <div id="headlinePreview"></div>
+        </div>
+      </div>
+      <div class="bottom-bar">
+        <div class="download-pill">
+          <button id="downloadBtn" class="download-btn"><i class="ph ph-download-simple"></i> Download Image</button>
+        </div>
+      </div>
+    </main>
+
+    <aside class="sidebar sidebar-right">
+      <div class="header"><h1>Text & Overlay</h1></div>
+      <div class="scroll-content">
+        <div class="control-group">
+          <label>HEADLINE</label>
+          <textarea id="headlineInput" placeholder="Enter headline text...">NOSCOPE</textarea>
+        </div>
+        <div class="control-group">
+          <label>HIGHLIGHT WORDS</label>
+          <div id="wordControls"></div>
+        </div>
+        <div class="control-group">
+          <div class="group-title">Typography</div>
+          <div class="row"><span class="row-label">Size</span><input id="fontSizeInput" type="range" min="10" max="200" value="87"><input id="fontSizeNum" type="number" value="87"></div>
+          <div class="row"><span class="row-label">Pos X</span><input id="posXInput" type="range" min="-500" max="1000" value="75"><input id="posXNum" type="number" value="75"></div>
+          <div class="row"><span class="row-label">Pos Y</span><input id="posYInput" type="range" min="0" max="1500" value="241"><input id="posYNum" type="number" value="241"></div>
+        </div>
+        <div class="control-group">
+          <label>OVERLAY</label>
+          <select id="overlaySelect" onchange="document.getElementById('overlayImage').src=this.value">
+            <option value="overlay.png">Standard</option>
+            <option value="overlay_dark.png">Dark</option>
+          </select>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const REAL_W = 1440, REAL_H = 1800, DISPLAY_SCALE = 0.4;
+      
+      let state = {
+        layers: [], activeId: null, tool: 'move', eraseMode: 'remove',
+        maskShape: 'circle', maskPoints: [], isDrawing: false, dragStart: {x:0,y:0},
+        wordColors: {}, eraser: { size: 80, soft: 50 }, maskProps: { stroke:0, color:'#ffffff', soft:0 }
+      };
+
+      let layerCounter = 0, lastPos = {x:0, y:0};
+
+      const els = {
+        layerInput: document.getElementById('layerInput'), addLayerBtn: document.getElementById('addLayerBtn'),
+        layersRoot: document.getElementById('layersRoot'), layerList: document.getElementById('layerListUi'),
+        propsPanel: document.getElementById('layerProperties'), eraserSettings: document.getElementById('eraserSettings'),
+        maskSettings: document.getElementById('maskSettings'), realCanvas: document.getElementById('realCanvas'),
+        maskOverlay: document.getElementById('maskOverlay'), overlayMaskCtx: document.getElementById('maskOverlay').getContext('2d'),
+        textPreview: document.getElementById('headlinePreview'), textInput: document.getElementById('headlineInput'),
+        wordControls: document.getElementById('wordControls'), brushCursor: document.getElementById('brushCursor'),
+        bwToggle: document.getElementById('bwToggle')
+      };
+
+      // --- COORDINATES ---
+      function getCoords(e) {
+        const rect = els.realCanvas.getBoundingClientRect();
+        const scaleX = 1440 / rect.width;
+        const scaleY = 1800 / rect.height;
+        return {
+          x: (e.clientX - rect.left) * scaleX,
+          y: (e.clientY - rect.top) * scaleY
+        };
+      }
+
+      function toLocal(wx, wy, l) {
+        const cx = l.canvas.width/2; const cy = l.canvas.height/2;
+        const rx = wx - (l.x + (l.canvas.width * l.scale)/2);
+        const ry = wy - (l.y + (l.canvas.height * l.scale)/2);
+        const rad = -l.rot * (Math.PI/180);
+        return { 
+          x: (rx * Math.cos(rad) - ry * Math.sin(rad)) / l.scale + cx,
+          y: (rx * Math.sin(rad) + ry * Math.cos(rad)) / l.scale + cy
+        };
+      }
+
+      // --- LAYERS ---
+      els.addLayerBtn.onclick = () => els.layerInput.click();
+      els.layerInput.onchange = (e) => {
+        if(e.target.files?.[0]) {
+          const r = new FileReader();
+          r.onload = (ev) => {
+            const img = new Image();
+            img.onload = () => createLayer(img);
+            img.src = ev.target.result;
+          };
+          r.readAsDataURL(e.target.files[0]);
+        }
+        e.target.value = '';
+      };
+
+      function createLayer(img, props={}) {
+        const id = ++layerCounter;
+        const div = document.createElement('div');
+        div.className = 'layer-div';
+        div.style.width = img.width+'px'; div.style.height=img.height+'px';
+        div.dataset.layerId = id; 
+        
+        const cvs = document.createElement('canvas');
+        cvs.width = img.width; cvs.height = img.height;
+        const ctx = cvs.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        div.appendChild(cvs);
+        els.layersRoot.appendChild(div);
+
+        const newLayer = {
+          id, div, canvas: cvs, ctx, originalImg: img,
+          maskData: props.maskData ? JSON.parse(JSON.stringify(props.maskData)) : null,
+          x: props.x ?? (REAL_W-img.width)/2, 
+          y: props.y ?? (REAL_H-img.height)/2, 
+          scale: props.scale ?? 1, rot: props.rot ?? 0, opacity: props.opacity ?? 100, isBW: props.isBW ?? false
+        };
+
+        state.layers.push(newLayer);
+        setActiveLayer(id);
+        renderLayerList();
+        updateVisuals(id);
+        if(newLayer.maskData) recomposeLayer(newLayer);
+      }
+
+      window.duplicateLayer = () => {
+        if(!state.activeId) return;
+        const l = state.layers.find(x => x.id === state.activeId);
+        createLayer(l.originalImg, {
+            x: l.x + 20, y: l.y + 20, scale: l.scale, rot: l.rot, opacity: l.opacity, isBW: l.isBW, maskData: l.maskData
+        });
+      };
+
+      function setActiveLayer(id) {
+        state.activeId = id;
+        renderLayerList();
+        
+        if(!id) { els.propsPanel.style.display='none'; els.maskSettings.style.display='none'; return; }
+        
+        els.propsPanel.style.display = 'flex';
+        const l = state.layers.find(x => x.id === id);
+        
+        syncInput('layerScale', l.scale*100);
+        syncInput('layerRot', l.rot);
+        syncInput('layerOpacity', l.opacity);
+        els.bwToggle.classList.toggle('active', l.isBW);
+
+        if(l.maskData) {
+           syncInput('maskStroke', l.maskData.props.stroke);
+           syncInput('maskSoft', l.maskData.props.soft);
+           document.getElementById('maskColor').value = l.maskData.props.color;
+        }
+        if(state.tool === 'mask') els.maskSettings.style.display = 'block';
+      }
+
+      function renderLayerList() {
+        els.layerList.innerHTML = '';
+        if(state.layers.length===0) { els.layerList.innerHTML=`<div style="padding:20px;text-align:center;color:#64748b;font-size:12px;">No images</div>`; return; }
+        [...state.layers].reverse().forEach(l => {
+          const div = document.createElement('div');
+          div.className = `layer-item ${state.activeId === l.id ? 'active' : ''}`;
+          div.draggable = true; div.dataset.id = l.id;
+          div.addEventListener('dragstart', handleDragStart);
+          div.addEventListener('dragover', handleDragOver);
+          div.addEventListener('drop', handleDrop);
+          div.onclick = () => setActiveLayer(l.id);
+          div.innerHTML = `
+            <img src="${l.canvas.toDataURL()}" class="layer-thumb" style="filter:grayscale(${l.isBW?1:0})">
+            <span class="layer-name">Image ${l.id} ${l.maskData?'(Mask)':''}</span>
+            <button class="icon-btn" onclick="deleteLayer(${l.id}, event)"><i class="ph ph-trash"></i></button>
+          `;
+          els.layerList.appendChild(div);
+        });
+      }
+
+      // --- MOUSE DOWN ---
+      els.realCanvas.addEventListener('mousedown', e => {
+        if (state.tool === 'move') {
+           let hitId = null;
+           const sorted = [...state.layers].reverse();
+           for(let l of sorted) {
+              const rect = l.div.getBoundingClientRect();
+              if(e.clientX >= rect.left && e.clientX <= rect.right &&
+                 e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                 hitId = l.id; break;
+              }
+           }
+           if(hitId) setActiveLayer(hitId);
+        }
+
+        if(!state.activeId) return;
+        
+        state.isDrawing = true;
+        state.dragStart = getCoords(e);
+        lastPos = state.dragStart;
+        
+        if(state.tool==='mask' && state.maskShape==='pen') {
+          state.maskPoints.push(state.dragStart); drawMaskOverlay(state.dragStart);
+        } else if(state.tool==='erase') performErase(state.dragStart);
+      });
+
+      window.addEventListener('mouseup', () => {
+        if(state.tool==='mask' && state.isDrawing && state.maskShape!=='pen') commitMask();
+        state.isDrawing = false;
+        if(state.maskShape!=='pen') clearMaskOverlay();
+      });
+
+      window.addEventListener('dblclick', () => {
+         if(state.tool==='mask' && state.maskShape==='pen') { commitMask(); state.maskPoints=[]; clearMaskOverlay(); }
+      });
+
+      els.realCanvas.addEventListener('mousemove', e => {
+        if(state.tool === 'move') {
+           let hit = false;
+           for(let l of state.layers) {
+              const rect = l.div.getBoundingClientRect();
+              if(e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) hit=true;
+           }
+           els.realCanvas.style.cursor = hit ? 'grab' : 'default';
+        }
+
+        if(!state.activeId) return;
+        const curr = getCoords(e);
+        
+        if(state.tool==='move' && state.isDrawing) {
+           const l = state.layers.find(x=>x.id===state.activeId);
+           l.x += curr.x - lastPos.x; l.y += curr.y - lastPos.y;
+           updateVisuals(l.id);
+        } else if(state.tool==='erase' && state.isDrawing) {
+           performErase(curr);
+        } else if(state.tool==='mask' && state.isDrawing) {
+           drawMaskOverlay(curr);
+        }
+        lastPos = curr;
+      });
+
+      window.addEventListener('mousemove', e => {
+        if(state.tool==='erase') { els.brushCursor.style.left = e.clientX+'px'; els.brushCursor.style.top = e.clientY+'px'; }
+      });
+
+      // --- RENDER TEXT ---
+      function renderText() {
+        const raw = els.textInput.value||"";
+        const parts = raw.split(/(\s+)/);
+        els.textPreview.innerHTML=''; els.wordControls.innerHTML='';
+        parts.forEach((tok,i) => {
+           if(!tok)return;
+           const c = state.wordColors[i]||'#ffffff';
+           const s = document.createElement('span'); s.textContent=tok; s.style.color=c;
+           s.onclick=e=>{e.stopPropagation(); toggleColor(i);};
+           els.textPreview.appendChild(s);
+           if(!/^\s+$/.test(tok)) {
+              const chip=document.createElement('div'); chip.className='word-chip'; chip.textContent=tok; chip.style.color=c;
+              if(c!=='#ffffff'){chip.style.borderColor=c;chip.style.background='rgba(205,113,254,0.2)';}
+              chip.onclick=()=>toggleColor(i); els.wordControls.appendChild(chip);
+           }
+        });
+      }
+      function toggleColor(i) { state.wordColors[i]=(state.wordColors[i]==='#ffffff'||!state.wordColors[i])?'#cd71fe':'#ffffff'; renderText(); }
+      els.textInput.oninput = () => { state.wordColors={}; renderText(); };
+
+      // --- MASK & ERASE LOGIC ---
+      function clearMaskOverlay() { els.overlayMaskCtx.clearRect(0,0,1440,1800); }
+      function drawMaskOverlay(curr) {
+        const ctx = els.overlayMaskCtx;
+        ctx.clearRect(0,0,1440,1800);
+        ctx.strokeStyle='#A700FF'; ctx.lineWidth=3; ctx.setLineDash([5,5]);
+        const s = state.dragStart;
+        ctx.beginPath();
+        if(state.maskShape==='rect') {
+           const dx = Math.abs(curr.x-s.x); const dy = Math.abs(curr.y-s.y);
+           // Corner to Corner
+           ctx.rect(s.x, s.y, curr.x-s.x, curr.y-s.y);
+        } else if(state.maskShape==='circle') {
+           const r = Math.sqrt(Math.pow(curr.x-s.x,2)+Math.pow(curr.y-s.y,2));
+           ctx.arc(s.x, s.y, r, 0, Math.PI*2);
+        } else if(state.maskShape==='pen' && state.maskPoints.length>0) {
+           ctx.moveTo(state.maskPoints[0].x, state.maskPoints[0].y);
+           state.maskPoints.forEach(p => ctx.lineTo(p.x, p.y));
+           ctx.lineTo(curr.x, curr.y);
+        }
+        ctx.stroke();
+      }
+
+      function commitMask() {
+        const l = state.layers.find(x=>x.id===state.activeId);
+        let md = { type: state.maskShape, points: [], props: {...state.maskProps} };
+        const s = state.dragStart; const e = lastPos;
+
+        if(state.maskShape==='rect') {
+           // Corner to Corner (4 points)
+           const p1 = toLocal(s.x, s.y, l);
+           const p2 = toLocal(e.x, s.y, l);
+           const p3 = toLocal(e.x, e.y, l);
+           const p4 = toLocal(s.x, e.y, l);
+           md.points = [p1, p2, p3, p4];
+        } else if(state.maskShape==='circle') {
+           const r = Math.sqrt(Math.pow(e.x-s.x,2)+Math.pow(e.y-s.y,2));
+           md.center = toLocal(s.x, s.y, l); md.radius = r / l.scale;
+        } else if(state.maskShape==='pen' && state.maskPoints.length>2) {
+           md.points = state.maskPoints.map(p => toLocal(p.x, p.y, l));
+        }
+        l.maskData = md;
+        recomposeLayer(l);
+        setActiveLayer(l.id);
+      }
+
+      function performErase({x,y}) {
+        const l = state.layers.find(x=>x.id===state.activeId);
+        const loc = toLocal(x,y,l);
+        const ctx = l.ctx;
+        ctx.save();
+        ctx.beginPath(); ctx.arc(loc.x, loc.y, state.eraser.size, 0, Math.PI*2);
+        if(state.eraseMode==='remove') {
+           ctx.globalCompositeOperation = 'destination-out';
+           if(state.eraser.soft>0) {
+             const g = ctx.createRadialGradient(loc.x, loc.y, 0, loc.x, loc.y, state.eraser.size);
+             g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(1-(state.eraser.soft/100),'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,0,0,0)');
+             ctx.fillStyle = g;
+           } else ctx.fillStyle='black';
+           ctx.fill();
+        } else {
+           ctx.globalCompositeOperation = 'source-over';
+           ctx.clip();
+           if(l.isBW) ctx.filter = "grayscale(100%)";
+           ctx.drawImage(l.originalImg, 0, 0);
+           ctx.filter = "none";
+        }
+        ctx.restore();
+      }
+
+      function recomposeLayer(l) {
+        l.ctx.clearRect(0,0,l.canvas.width, l.canvas.height);
+        const temp = document.createElement('canvas');
+        temp.width = l.canvas.width; temp.height = l.canvas.height;
+        const tCtx = temp.getContext('2d');
+        if(l.isBW) tCtx.filter = "grayscale(100%)";
+        tCtx.drawImage(l.originalImg, 0, 0);
+        tCtx.filter = "none";
+
+        if(!l.maskData) { l.ctx.drawImage(temp,0,0); return; }
+
+        const md = l.maskData;
+        const maskC = document.createElement('canvas');
+        maskC.width = l.canvas.width; maskC.height = l.canvas.height;
+        const mCtx = maskC.getContext('2d');
+
+        mCtx.beginPath();
+        if(md.type==='circle') mCtx.arc(md.center.x, md.center.y, md.radius, 0, Math.PI*2);
+        else {
+           if(md.points.length>0) {
+             mCtx.moveTo(md.points[0].x, md.points[0].y);
+             for(let i=1; i<md.points.length; i++) mCtx.lineTo(md.points[i].x, md.points[i].y);
+             mCtx.closePath();
+           }
+        }
+        mCtx.fillStyle='white';
+        if(md.props.soft>0) mCtx.filter = `blur(${md.props.soft}px)`;
+        mCtx.fill();
+        mCtx.filter = 'none'; 
+
+        mCtx.globalCompositeOperation = 'source-in';
+        mCtx.drawImage(temp, 0, 0);
+
+        if(md.props.stroke>0) {
+           mCtx.globalCompositeOperation = 'source-over';
+           mCtx.beginPath();
+           if(md.type==='circle') mCtx.arc(md.center.x, md.center.y, md.radius, 0, Math.PI*2);
+           else {
+              mCtx.moveTo(md.points[0].x, md.points[0].y);
+              for(let i=1; i<md.points.length; i++) mCtx.lineTo(md.points[i].x, md.points[i].y);
+              mCtx.closePath();
+           }
+           mCtx.lineWidth = md.props.stroke; mCtx.strokeStyle = md.props.color;
+           mCtx.stroke();
+        }
+        l.ctx.drawImage(maskC, 0, 0);
+      }
+
+      function syncInput(id, v) { document.getElementById(id).value = v; document.getElementById(id+'Num').value = v; }
+      function linkProp(id, prop, fn=v=>v) {
+         const sl = document.getElementById(id); const nm = document.getElementById(id+'Num');
+         const up = (v) => {
+            if(state.activeId) {
+               const l = state.layers.find(x=>x.id===state.activeId);
+               if(l) { l[prop] = fn(parseFloat(v)); syncInput(id, v); updateVisuals(l.id); }
+            }
+         };
+         sl.oninput = e => up(e.target.value); nm.oninput = e => up(e.target.value);
+      }
+      function updateVisuals(id){ const l=state.layers.find(x=>x.id===id); if(l) { l.div.style.transform=`translate(${l.x}px,${l.y}px) rotate(${l.rot}deg) scale(${l.scale})`; l.div.style.opacity=l.opacity/100; } }
+      linkProp('layerScale', 'scale', v=>v/100); linkProp('layerRot', 'rot'); linkProp('layerOpacity', 'opacity');
+
+      ['maskStroke','maskSoft'].forEach(k=>{ 
+         const sl=document.getElementById(k); const nm=document.getElementById(k+'Num');
+         const up = () => { nm.value=sl.value; if(state.activeId){ const l=state.layers.find(x=>x.id===state.activeId); if(l&&l.maskData){ l.maskData.props[k.replace('mask','').toLowerCase()]=parseFloat(sl.value); recomposeLayer(l); } } };
+         sl.oninput=up; nm.oninput=up; 
+      });
+      document.getElementById('maskColor').oninput=e=>{ if(state.activeId){ const l=state.layers.find(x=>x.id===state.activeId); if(l&&l.maskData){ l.maskData.props.color=e.target.value; recomposeLayer(l); } } };
+      
+      ['eraseSize','eraseSoft'].forEach(k=>{ const sl=document.getElementById(k); sl.oninput=()=>{ state.eraser[k.replace('erase','').toLowerCase()]=parseFloat(sl.value); if(state.tool==='erase'){ const s=state.eraser.size*2*0.4; els.brushCursor.style.width=s+'px'; els.brushCursor.style.height=s+'px'; } }; });
+
+      function linkText(id,p){ document.getElementById(id).oninput=e=>{ document.getElementById(id+'Num').value=e.target.value; if(p==='fontSize') els.textPreview.style.fontSize=e.target.value+'px'; else els.textPreview.style[p]=e.target.value+'px'; }; }
+      linkText('fontSizeInput','fontSize'); linkText('posXInput','left'); linkText('posYInput','bottom');
+      
+      // --- FIXED HYBRID EXPORT ---
+      document.getElementById('downloadBtn').onclick=async()=>{
+         const btn=document.getElementById('downloadBtn'); btn.innerHTML='Rendering...';
+         
+         const exportCanvas = document.createElement('canvas');
+         exportCanvas.width = 1440; exportCanvas.height = 1800;
+         const ctx = exportCanvas.getContext('2d');
+         ctx.fillStyle = "black"; ctx.fillRect(0,0,1440,1800);
+
+         // 1. Manually draw layers (Bypass html2canvas for images)
+         state.layers.forEach(l => {
+             ctx.save();
+             const cx = l.x + (l.canvas.width * l.scale)/2;
+             const cy = l.y + (l.canvas.height * l.scale)/2;
+             ctx.translate(cx, cy);
+             ctx.rotate(l.rot * Math.PI/180);
+             ctx.scale(l.scale, l.scale);
+             ctx.globalAlpha = l.opacity / 100;
+             ctx.drawImage(l.canvas, -l.canvas.width/2, -l.canvas.height/2);
+             ctx.restore();
+         });
+
+         // 2. Draw Overlay
+         const ovImg = document.getElementById('overlayImage');
+         ctx.globalAlpha = 1;
+         ctx.drawImage(ovImg, 0, 0, 1440, 1800);
+
+         // 3. Render Text Separately
+         // We create a clean temporary container for text to avoid distortion
+         const txtContainer = document.createElement('div');
+         txtContainer.style.position = 'fixed'; txtContainer.style.left = '0'; txtContainer.style.top = '0';
+         txtContainer.style.width = '1440px'; txtContainer.style.height = '1800px';
+         txtContainer.style.pointerEvents = 'none';
+         txtContainer.style.background = 'transparent';
+         txtContainer.style.zIndex = '-9999';
+         
+         const cloneTxt = els.textPreview.cloneNode(true);
+         // Force correct positioning style
+         cloneTxt.style.position = 'absolute';
+         cloneTxt.style.left = document.getElementById('posXInput').value + 'px';
+         cloneTxt.style.bottom = document.getElementById('posYInput').value + 'px';
+         cloneTxt.style.right = '40px'; // Prevent overflow
+         cloneTxt.style.fontSize = document.getElementById('fontSizeInput').value + 'px';
+         
+         txtContainer.appendChild(cloneTxt);
+         document.body.appendChild(txtContainer);
+
+         try{ 
+             await document.fonts.ready; 
+             const txtCanvas = await html2canvas(txtContainer, { backgroundColor: null, scale: 1 });
+             ctx.drawImage(txtCanvas, 0, 0);
+             const link=document.createElement('a'); link.download='noscope-post.png'; link.href=exportCanvas.toDataURL('image/png'); link.click(); 
+         } catch(e){console.error(e); alert('Export Error');}
+         
+         document.body.removeChild(txtContainer);
+         btn.innerHTML='<i class="ph ph-download-simple"></i> Download Image';
+      };
+
+      // INIT
+      renderText();
+      
+      // TOOL SWITCHERS & DRAG DROP
+      window.setTool=t=>{state.tool=t; document.querySelectorAll('.control-group button').forEach(b=>b.classList.remove('active-tool')); if(t==='move')document.getElementById('toolMove').classList.add('active-tool'); if(t==='erase')document.getElementById('toolErase').classList.add('active-tool'); if(t==='mask')document.getElementById('toolMask').classList.add('active-tool'); els.eraserSettings.style.display=t==='erase'?'block':'none'; els.maskSettings.style.display=t==='mask'?'block':'none'; els.brushCursor.style.display=t==='erase'?'block':'none'; if(t==='erase'){const s=state.eraser.size*2*0.4; els.brushCursor.style.width=s+'px'; els.brushCursor.style.height=s+'px';} state.maskPoints=[]; clearMaskOverlay(); };
+      window.setEraseMode=m=>{state.eraseMode=m; document.getElementById('modeRemove').classList.toggle('btn-primary',m==='remove'); document.getElementById('modeRestore').classList.toggle('btn-primary',m==='restore'); els.brushCursor.style.borderColor=m==='restore'?'#4ade80':'#fff';};
+      window.setMaskShape=s=>{
+          state.maskShape=s; 
+          ['rect','circle','pen'].forEach(k=>document.getElementById('mask'+k.charAt(0).toUpperCase()+k.slice(1)).classList.toggle('btn-primary',s===k));
+          document.getElementById('maskInstructions').textContent = s==='pen' ? 'Click points to draw. Double-click to close.' : 'Drag on canvas to create shape.';
+          state.maskPoints=[]; clearMaskOverlay();
+      };
+      window.removeMask=()=>{const l=state.layers.find(x=>x.id===state.activeId); if(l){l.maskData=null; recomposeLayer(l); setActiveLayer(l.id);}};
+      window.deleteLayer=(id,e)=>{e?.stopPropagation(); const l=state.layers.find(x=>x.id===id); l.div.remove(); state.layers=state.layers.filter(x=>x.id!==id); setActiveLayer(null);};
+      window.toggleBW=()=>{if(!state.activeId)return; const l=state.layers.find(x=>x.id===state.activeId); l.isBW=!l.isBW; recomposeLayer(l); setActiveLayer(l.id); updateVisuals(l.id); renderLayerList();};
+
+      let draggedId=null;
+      function handleDragStart(e){draggedId=parseInt(this.dataset.id); this.classList.add('dragging'); e.dataTransfer.effectAllowed='move';}
+      function handleDragOver(e){e.preventDefault(); e.dataTransfer.dropEffect='move'; return false;}
+      function handleDrop(e){
+        e.stopPropagation(); const dropId=parseInt(this.dataset.id);
+        if(draggedId!==dropId){
+           const o=state.layers.findIndex(x=>x.id===draggedId); const n=state.layers.findIndex(x=>x.id===dropId);
+           const [mv]=state.layers.splice(o,1); state.layers.splice(n,0,mv);
+           state.layers.forEach(l=>els.layersRoot.appendChild(l.div)); renderLayerList();
+        }
+        document.querySelectorAll('.layer-item').forEach(i=>i.classList.remove('dragging')); return false;
+      }
+      
+      window.addEventListener('mousemove', e => {
+        if(state.tool==='erase') { els.brushCursor.style.left = e.clientX+'px'; els.brushCursor.style.top = e.clientY+'px'; }
+      });
+    });
+  </script>
+</body>
+</html>
