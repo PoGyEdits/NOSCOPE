@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <title>NOSCOPE IG Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+    .app {
+      display: flex;
+      flex-direction: row;
+      gap: 24px;
+      width: 100%;
+      max-width: 1200px;
+    }
+    @media (max-width: 900px) { .app { flex-direction: column; } }
+
+    .panel {
+      flex: 1;
+      background: #020617;
+      border-radius: 16px;
+      padding: 16px 18px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: calc(100vh - 48px);
+      overflow: auto;
+    }
+    .panel h1 { margin: 0 0 4px; font-size: 20px; }
+    label {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #94a3b8;
+      display: block;
+      margin-bottom: 6px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: #020617;
+      color: #e5e7eb;
+      padding: 10px 12px;
+      font-size: 15px;
+      line-height: 1.4;
+      outline: none;
+    }
+    input[type="file"] { font-size: 13px; }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .row span {
+      font-size: 12px;
+      color: #9ca3af;
+      min-width: 70px;
+    }
+    input[type="range"],
+    input[type="number"],
+    select {
+      flex: 1;
+      padding: 4px 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: #020617;
+      color: #e5e7eb;
+    }
+    .number-small {
+      max-width: 90px;
+      flex: 0 0 auto;
+    }
+    .hint {
+      font-size: 12px;
+      color: #64748b;
+    }
+    button {
+      border-radius: 999px;
+      border: none;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      background: linear-gradient(90deg, #a855f7, #ec4899);
+      color: white;
+      font-weight: 600;
+      margin-top: 8px;
+      align-self: flex-start;
+    }
+    button:hover { opacity: 0.9; }
+
+    .preview-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .preview-label {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: #94a3b8;
+    }
+
+    /* Preview = přesně to, co se exportuje (bez rounded corners, bez borderu) */
+    .preview {
+      position: relative;
+      width: 720px;
+      height: 900px;
+      margin-left: auto;
+      background: #000;
+      overflow: hidden;
+    }
+    @media (max-width: 900px) {
+      .preview { width: 360px; height: 450px; }
+    }
+
+    .preview-layer { position: absolute; inset: 0; }
+
+    #bgWrapper { overflow: hidden; }
+    #bgInner {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: auto;
+      transform-origin: top left;
+    }
+
+    #overlayImage {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+    }
+
+    #headlinePreview {
+      position: absolute;
+      left: 40px;
+      right: 80px;
+      bottom: 124px;
+
+      font-family: "Source Sans 3", system-ui, -apple-system, sans-serif;
+      font-weight: 500;
+      font-size: 43px;
+      line-height: 1.1;
+      text-align: left;
+      white-space: pre-wrap;
+    }
+
+    #wordControls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+      max-height: 200px;
+      overflow: auto;
+    }
+    .word-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      font-size: 11px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .word-chip span {
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 900px) {
+      #headlinePreview { font-size: 30px; }
+    }
+
+    /* Preset styling */
+    .presets-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 6px;
+      margin-bottom: 12px;
+    }
+    .preset-btn {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      color: #e5e7eb;
+      padding: 8px 12px;
+      border-radius: 8px;
+      text-align: left;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1.3;
+      transition: all 0.2s;
+      width: 100%;
+      align-self: stretch;
+      margin-top: 0;
+    }
+    .preset-btn:hover {
+      background: rgba(148, 163, 184, 0.1);
+      border-color: rgba(148, 163, 184, 0.5);
+    }
+
+    /* Layer styling */
+    .add-layer-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px dashed rgba(148, 163, 184, 0.4);
+      color: #cbd5e1;
+      width: 100%;
+      padding: 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 500;
+      margin-top: 6px;
+      margin-bottom: 12px;
+      transition: all 0.2s;
+    }
+    .add-layer-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(148, 163, 184, 0.6);
+    }
+    .layer-control-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .layer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      padding-bottom: 6px;
+    }
+    .layer-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .layer-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-icon {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      color: #e5e7eb;
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 0;
+      align-self: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-icon:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .btn-icon.delete-btn {
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+    .btn-icon.delete-btn:hover {
+      background: rgba(239, 68, 68, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="panel">
+      <h1>NOSCOPE post generator</h1>
+
+      <div>
+        <label for="headlineInput">Text do postu</label>
+        <textarea id="headlineInput" placeholder="Sem napiš text, může zůstat i prázdné 🙂"></textarea>
+      </div>
+
+      <div>
+        <label>Předvolby pro druhý slide (klikni pro vložení)</label>
+        <div class="presets-container">
+          <button type="button" class="preset-btn" data-preset="1">Sleduj NOSCOPE pro další novinky ze světa Counter-Strike</button>
+          <button type="button" class="preset-btn" data-preset="2">Counter-Strike zprávy najdeš vždy na našem profilu</button>
+          <button type="button" class="preset-btn" data-preset="3">Sleduj NOSCOPE pro všechny novinky ze světa Counter-Strike</button>
+          <button type="button" class="preset-btn" data-preset="4">Celý článek na NOSCOPE.cz</button>
+          <button type="button" class="preset-btn" data-preset="5">Sleduj NOSCOPE pro všechny informace z Counter-Strike</button>
+        </div>
+      </div>
+
+      <div>
+        <label>Overlay (světlejší / tmavší)</label>
+        <select id="overlaySelect">
+          <option value="overlay.png">Méně zatmavený</option>
+          <option value="overlay_dark.png">Více zatmavený</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Barva jednotlivých slov (klikni pro přepnutí)</label>
+        <div id="wordControls"></div>
+      </div>
+
+      <div>
+        <label>Vrstvy fotek na pozadí (max 4)</label>
+        <button id="addLayerBtn" type="button" class="add-layer-btn">+ Přidat vrstvu fotky</button>
+        <div id="layersContainer"></div>
+      </div>
+
+      <button id="downloadBtn">⬇️ Stáhnout PNG (1440×1800)</button>
+
+      <div class="hint">
+        Overlay exportuj jako <strong>overlay.png</strong> (normální) a <strong>overlay_dark.png</strong> (víc zatmavený), 1440×1800, průhledné pozadí. Výstup je vždy 1440×1800.
+      </div>
+    </div>
+
+    <div class="preview-wrapper">
+      <div class="preview-label">Náhled Instagram postu</div>
+
+      <div class="preview" id="previewRoot">
+        <div id="bgWrapper" class="preview-layer"></div>
+        <img id="overlayImage" class="preview-layer" src="overlay.png" alt="Overlay" />
+        <div id="headlinePreview"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const headlineInput = document.getElementById("headlineInput");
+    const headlinePreview = document.getElementById("headlinePreview");
+
+    const overlayImage = document.getElementById("overlayImage");
+    const overlaySelect = document.getElementById("overlaySelect");
+
+    const wordControls = document.getElementById("wordControls");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const previewRoot = document.getElementById("previewRoot");
+    const bgWrapper = document.getElementById("bgWrapper");
+
+    // žádný defaultní text – může být úplně prázdné
+    const defaultText = "";
+
+    let tokens = [];
+    let wordColors = {}; // index -> "#ffffff" or "#cd71fe"
+
+    // Preset data mapping
+    const presets = {
+      1: {
+        text: "Sleduj NOSCOPE pro další novinky ze světa Counter-Strike",
+        highlights: ["NOSCOPE", "Counter-Strike"]
+      },
+      2: {
+        text: "Counter-Strike zprávy najdeš vždy na našem profilu",
+        highlights: ["Counter-Strike", "zprávy"]
+      },
+      3: {
+        text: "Sleduj NOSCOPE pro všechny novinky ze světa Counter-Strike",
+        highlights: ["NOSCOPE", "Counter-Strike"]
+      },
+      4: {
+        text: "Celý článek na NOSCOPE.cz",
+        highlights: ["NOSCOPE.cz"]
+      },
+      5: {
+        text: "Sleduj NOSCOPE pro všechny informace z Counter-Strike",
+        highlights: ["NOSCOPE", "Counter-Strike"]
+      }
+    };
+
+    function tokenize(text) {
+      return text.split(/(\s+)/);
+    }
+
+    function getWordColor(idx) {
+      return wordColors[idx] || "#ffffff";
+    }
+
+    function toggleWordColor(idx) {
+      const current = getWordColor(idx);
+      wordColors[idx] = current === "#ffffff" ? "#cd71fe" : "#ffffff";
+      renderPreview();
+    }
+
+    function renderPreview() {
+      // ŽÁDNÝ fallback – pokud je textarea prázdná, nevykreslí se nic
+      const text = headlineInput.value || defaultText;
+
+      tokens = tokenize(text);
+      headlinePreview.innerHTML = "";
+
+      tokens.forEach((tok, idx) => {
+        if (tok === "") return;
+        if (/^\s+$/.test(tok)) {
+          headlinePreview.appendChild(document.createTextNode(tok));
+        } else {
+          const span = document.createElement("span");
+          span.textContent = tok;
+          span.style.color = getWordColor(idx);
+          span.style.cursor = "pointer";
+          span.addEventListener("click", () => toggleWordColor(idx));
+          headlinePreview.appendChild(span);
+        }
+      });
+
+      renderWordControls();
+    }
+
+    function renderWordControls() {
+      wordControls.innerHTML = "";
+      tokens.forEach((tok, idx) => {
+        if (/^\s+$/.test(tok) || tok === "") return;
+
+        const chip = document.createElement("div");
+        chip.className = "word-chip";
+        const span = document.createElement("span");
+        span.textContent = tok;
+        chip.appendChild(span);
+
+        chip.style.color = getWordColor(idx);
+        chip.addEventListener("click", () => toggleWordColor(idx));
+
+        wordControls.appendChild(chip);
+      });
+    }
+
+    headlineInput.addEventListener("input", () => {
+      wordColors = {};
+      renderPreview();
+    });
+
+    // start – prázdný text
+    headlineInput.value = "";
+    renderPreview();
+
+    // přepínač overlay PNG
+    overlaySelect.addEventListener("change", () => {
+      overlayImage.src = overlaySelect.value;
+    });
+
+    // Presets handler
+    function applyPreset(id) {
+      const preset = presets[id];
+      if (!preset) return;
+
+      if (headlineInput.value.trim() !== "" && headlineInput.value !== preset.text) {
+        const confirmOverwrite = confirm("Máte rozepsaný text. Chcete jej přepsat předvolbou?");
+        if (!confirmOverwrite) return;
+      }
+
+      headlineInput.value = preset.text;
+      wordColors = {};
+      tokens = tokenize(preset.text);
+
+      tokens.forEach((tok, idx) => {
+        const clean = tok.trim();
+        if (preset.highlights.includes(clean)) {
+          wordColors[idx] = "#cd71fe";
+        }
+      });
+
+      renderPreview();
+    }
+
+    document.querySelectorAll(".preset-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const presetId = btn.getAttribute("data-preset");
+        applyPreset(presetId);
+      });
+    });
+
+    // Multi-layer backgrounds configuration
+    let layers = [
+      {
+        id: Date.now(),
+        src: "",
+        name: "Vrstva 1",
+        zoom: 100,
+        x: 0,
+        y: 0
+      }
+    ];
+
+    function clamp(val, min, max) {
+      return Math.min(max, Math.max(min, val));
+    }
+
+    function updateAddButtonState() {
+      const addLayerBtn = document.getElementById("addLayerBtn");
+      if (layers.length >= 4) {
+        addLayerBtn.disabled = true;
+        addLayerBtn.style.opacity = "0.5";
+        addLayerBtn.style.cursor = "not-allowed";
+        addLayerBtn.innerText = "Max 4 vrstvy";
+      } else {
+        addLayerBtn.disabled = false;
+        addLayerBtn.style.opacity = "1";
+        addLayerBtn.style.cursor = "pointer";
+        addLayerBtn.innerText = "+ Přidat vrstvu fotky";
+      }
+    }
+
+    function renderLayerControls() {
+      const layersContainer = document.getElementById("layersContainer");
+      layersContainer.innerHTML = "";
+
+      layers.forEach((layer, idx) => {
+        const card = document.createElement("div");
+        card.className = "layer-control-card";
+        card.dataset.id = layer.id;
+
+        card.innerHTML = `
+          <div class="layer-header">
+            <span class="layer-title" title="${layer.name}">${layer.name}</span>
+            <div class="layer-actions">
+              <button type="button" class="btn-icon move-up-btn" title="Posunout nahoru" ${idx === 0 ? "disabled style='opacity: 0.3; cursor: not-allowed;'" : ""}>▲</button>
+              <button type="button" class="btn-icon move-down-btn" title="Posunout dolů" ${idx === layers.length - 1 ? "disabled style='opacity: 0.3; cursor: not-allowed;'" : ""}>▼</button>
+              <button type="button" class="btn-icon delete-btn" title="Smazat vrstvu">🗑</button>
+            </div>
+          </div>
+          <div class="layer-body">
+            <input type="file" class="layer-file-input" accept="image/*" style="margin-bottom: 10px;" />
+            <div class="row">
+              <span>Zoom (%)</span>
+              <input type="range" class="layer-zoom-range" min="10" max="400" value="${layer.zoom}" step="1" />
+              <input type="number" class="layer-zoom-number number-small" value="${layer.zoom}" step="1" min="10" max="400" />
+            </div>
+            <div class="row">
+              <span>Posun X (px)</span>
+              <input type="range" class="layer-x-range" min="-1000" max="1000" value="${layer.x}" step="1" />
+              <input type="number" class="layer-x-number number-small" value="${layer.x}" step="1" />
+            </div>
+            <div class="row">
+              <span>Posun Y (px)</span>
+              <input type="range" class="layer-y-range" min="-1000" max="1000" value="${layer.y}" step="1" />
+              <input type="number" class="layer-y-number number-small" value="${layer.y}" step="1" />
+            </div>
+          </div>
+        `;
+        layersContainer.appendChild(card);
+      });
+
+      updateAddButtonState();
+    }
+
+    function renderBgLayers() {
+      bgWrapper.innerHTML = "";
+      // Renders layers from bottom (length-1) to top (0) so index 0 is on top
+      for (let i = layers.length - 1; i >= 0; i--) {
+        const layer = layers[i];
+        if (!layer.src) continue;
+        const img = document.createElement("img");
+        img.src = layer.src;
+        img.className = "bg-layer";
+        img.style.position = "absolute";
+        img.style.top = "0";
+        img.style.left = "0";
+        img.style.height = "100%";
+        img.style.width = "auto";
+        img.style.transformOrigin = "top left";
+        
+        const scale = layer.zoom / 100;
+        img.style.transform = `translate(${layer.x}px, ${layer.y}px) scale(${scale})`;
+        bgWrapper.appendChild(img);
+      }
+    }
+
+    function handleLayerInput(e) {
+      const card = e.target.closest(".layer-control-card");
+      if (!card) return;
+      const id = parseFloat(card.dataset.id);
+      const layer = layers.find(l => l.id === id);
+      if (!layer) return;
+
+      if (e.target.classList.contains("layer-zoom-range")) {
+        layer.zoom = parseFloat(e.target.value);
+        card.querySelector(".layer-zoom-number").value = layer.zoom;
+      } else if (e.target.classList.contains("layer-zoom-number")) {
+        layer.zoom = parseFloat(e.target.value) || 10;
+        card.querySelector(".layer-zoom-range").value = clamp(layer.zoom, 10, 400);
+      } else if (e.target.classList.contains("layer-x-range")) {
+        layer.x = parseFloat(e.target.value);
+        card.querySelector(".layer-x-number").value = layer.x;
+      } else if (e.target.classList.contains("layer-x-number")) {
+        layer.x = parseFloat(e.target.value) || 0;
+        card.querySelector(".layer-x-range").value = clamp(layer.x, -1000, 1000);
+      } else if (e.target.classList.contains("layer-y-range")) {
+        layer.y = parseFloat(e.target.value);
+        card.querySelector(".layer-y-number").value = layer.y;
+      } else if (e.target.classList.contains("layer-y-number")) {
+        layer.y = parseFloat(e.target.value) || 0;
+        card.querySelector(".layer-y-range").value = clamp(layer.y, -1000, 1000);
+      }
+
+      renderBgLayers();
+    }
+
+    const addLayerBtn = document.getElementById("addLayerBtn");
+    addLayerBtn.addEventListener("click", () => {
+      if (layers.length >= 4) return;
+      const newLayer = {
+        id: Date.now() + Math.random(),
+        src: "",
+        name: `Vrstva ${layers.length + 1}`,
+        zoom: 100,
+        x: 0,
+        y: 0
+      };
+      layers.unshift(newLayer);
+      renderLayerControls();
+      renderBgLayers();
+    });
+
+    const layersContainer = document.getElementById("layersContainer");
+    
+    layersContainer.addEventListener("click", (e) => {
+      const card = e.target.closest(".layer-control-card");
+      if (!card) return;
+      const id = parseFloat(card.dataset.id);
+      const idx = layers.findIndex(l => l.id === id);
+      if (idx === -1) return;
+
+      if (e.target.closest(".move-up-btn")) {
+        if (idx > 0) {
+          const temp = layers[idx];
+          layers[idx] = layers[idx - 1];
+          layers[idx - 1] = temp;
+          renderLayerControls();
+          renderBgLayers();
+        }
+      } else if (e.target.closest(".move-down-btn")) {
+        if (idx < layers.length - 1) {
+          const temp = layers[idx];
+          layers[idx] = layers[idx + 1];
+          layers[idx + 1] = temp;
+          renderLayerControls();
+          renderBgLayers();
+        }
+      } else if (e.target.closest(".delete-btn")) {
+        layers.splice(idx, 1);
+        renderLayerControls();
+        renderBgLayers();
+      }
+    });
+
+    layersContainer.addEventListener("input", handleLayerInput);
+
+    layersContainer.addEventListener("change", (e) => {
+      if (e.target.classList.contains("layer-file-input")) {
+        const card = e.target.closest(".layer-control-card");
+        if (!card) return;
+        const id = parseFloat(card.dataset.id);
+        const layer = layers.find(l => l.id === id);
+        if (!layer) return;
+
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          layer.src = event.target.result;
+          layer.name = file.name;
+          renderLayerControls();
+          renderBgLayers();
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Start initialization
+    renderLayerControls();
+    renderBgLayers();
+
+    // EXPORT 1440×1800 – snímáme přímo previewRoot
+    downloadBtn.addEventListener("click", async () => {
+      await document.fonts.ready;
+
+      const bigCanvas = await html2canvas(previewRoot, {
+        scale: 4,
+        backgroundColor: null,
+        useCORS: true
+      });
+
+      const finalCanvas = document.createElement("canvas");
+      finalCanvas.width = 1440;
+      finalCanvas.height = 1800;
+      const ctx = finalCanvas.getContext("2d");
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(bigCanvas, 0, 0, 1440, 1800);
+
+      const link = document.createElement("a");
+      link.href = finalCanvas.toDataURL("image/png");
+      link.download = "noscope-post-1440x1800.png";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    });
+  </script>
+</body>
+</html>
