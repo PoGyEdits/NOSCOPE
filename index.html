@@ -795,7 +795,11 @@
         btn.style.cursor = "wait";
 
         try {
-          const { default: removeBackground } = await import("https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.3/+esm");
+          const imglyModule = await import("https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.3/+esm");
+          const removeBackground = imglyModule.removeBackground || imglyModule.default;
+          if (typeof removeBackground !== "function") {
+            throw new Error("Funkce removeBackground nebyla v modulu nalezena.");
+          }
           const processedBlob = await removeBackground(layer.src);
           layer.src = URL.createObjectURL(processedBlob);
           layer.name = "[Bez pozadí] " + layer.name;
