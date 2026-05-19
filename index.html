@@ -310,9 +310,12 @@
         <textarea id="headlineInput" placeholder="Sem napiš text, může zůstat i prázdné 🙂"></textarea>
       </div>
 
-      <div>
-        <label>Předvolby pro druhý slide (klikni pro vložení)</label>
-        <div class="presets-container">
+      <div style="margin-bottom: 14px; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 10px; background: rgba(15, 23, 42, 0.4);">
+        <div id="presetsHeader" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+          <label style="margin-bottom: 0; cursor: pointer;">Předvolby pro druhý slide</label>
+          <span id="presetsArrow" style="font-size: 12px; transition: transform 0.2s; color: #94a3b8;">▼</span>
+        </div>
+        <div id="presetsBody" class="presets-container" style="display: none; margin-top: 10px;">
           <button type="button" class="preset-btn" data-preset="1">Sleduj NOSCOPE pro další novinky ze světa Counter-Strike</button>
           <button type="button" class="preset-btn" data-preset="2">Counter-Strike zprávy najdeš vždy na našem profilu</button>
           <button type="button" class="preset-btn" data-preset="3">Sleduj NOSCOPE pro všechny novinky ze světa Counter-Strike</button>
@@ -351,6 +354,15 @@
       <div class="preview-label">Náhled Instagram postu</div>
 
       <div class="preview" id="previewRoot">
+        <div id="maskInstruction" style="display:none; position:absolute; top:12px; left:12px; right:12px; background:rgba(15, 23, 42, 0.95); border:1px solid #a855f7; padding:10px 14px; border-radius:10px; color:#fff; font-size:12px; z-index:100; text-align:center; box-shadow: 0 4px 12px rgba(0,0,0,0.5); line-height: 1.5;">
+          <strong>Režim pera 🖋️ aktivní</strong><br/>
+          Klikáním na náhled přidejte body masky.<br/>
+          Klikněte na <span style="color:#22c55e; font-weight:bold;">zelený bod</span> pro dokončení.<br/>
+          <div style="margin-top:8px; display:flex; gap:6px; justify-content:center;">
+            <button type="button" id="btnFinishMask" style="background:#a855f7; color:#fff; border:none; padding:4px 10px; border-radius:6px; font-weight:600; cursor:pointer; font-size:11px;">Dokončit (Enter)</button>
+            <button type="button" id="btnCancelMask" style="background:#475569; color:#fff; border:none; padding:4px 10px; border-radius:6px; font-weight:600; cursor:pointer; font-size:11px;">Zrušit (Esc)</button>
+          </div>
+        </div>
         <div id="bgWrapper" class="preview-layer"></div>
         <img id="overlayImage" class="preview-layer" src="overlay.png" alt="Overlay" />
         <div id="headlinePreview"></div>
@@ -501,6 +513,20 @@
       });
     });
 
+    const presetsHeader = document.getElementById("presetsHeader");
+    const presetsBody = document.getElementById("presetsBody");
+    const presetsArrow = document.getElementById("presetsArrow");
+
+    presetsHeader.addEventListener("click", () => {
+      const isHidden = presetsBody.style.display === "none";
+      presetsBody.style.display = isHidden ? "flex" : "none";
+      presetsArrow.style.transform = isHidden ? "rotate(180deg)" : "";
+    });
+
+    // State parameters for Drawing Mode
+    let activeDrawingLayerId = null;
+    let drawingPoints = [];
+
     // Multi-layer backgrounds configuration
     let layers = [
       {
@@ -509,7 +535,12 @@
         name: "Vrstva 1",
         zoom: 100,
         x: 0,
-        y: 0
+        y: 0,
+        clipTop: 0,
+        clipRight: 0,
+        clipBottom: 0,
+        clipLeft: 0,
+        points: []
       }
     ];
 
@@ -541,6 +572,8 @@
         card.className = "layer-control-card";
         card.dataset.id = layer.id;
 
+        const hasPoints = layer.points && layer.points.length > 0;
+
         card.innerHTML = `
           <div class="layer-header">
             <span class="layer-title" title="${layer.name}">${layer.name}</span>
@@ -552,6 +585,8 @@
           </div>
           <div class="layer-body">
             <input type="file" class="layer-file-input" accept="image/*" style="margin-bottom: 10px;" />
+            <button type="button" class="btn-icon remove-bg-btn" style="margin-bottom: 12px; width: 100%; justify-content: center; background: linear-gradient(90deg, #ec4899, #a855f7); border: none; font-weight: 600;" ${layer.src ? "" : "disabled style='opacity: 0.5; cursor: not-allowed;'"}>✨ Odebrat pozadí (AI)</button>
+            
             <div class="row">
               <span>Zoom (%)</span>
               <input type="range" class="layer-zoom-range" min="10" max="400" value="${layer.zoom}" step="1" />
@@ -566,6 +601,41 @@
               <span>Posun Y (px)</span>
               <input type="range" class="layer-y-range" min="-1000" max="1000" value="${layer.y}" step="1" />
               <input type="number" class="layer-y-number number-small" value="${layer.y}" step="1" />
+            </div>
+            
+            <!-- Pen Mask Controls -->
+            <div class="row" style="margin-top: 10px; border-top: 1px solid rgba(148, 163, 184, 0.1); padding-top: 6px; display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-weight: 600; color: #cbd5e1; font-size: 11px;">Maska pera (Pen Tool 🖋️)</span>
+              <div style="display: flex; gap: 6px; width: 100%;">
+                <button type="button" class="btn-icon start-mask-btn" style="flex: 1; justify-content: center; background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.4);" ${layer.src ? "" : "disabled style='opacity: 0.5; cursor: not-allowed;'"}>🖋️ Kreslit masku</button>
+                <button type="button" class="btn-icon clear-mask-btn" style="flex: 1; justify-content: center; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" ${hasPoints ? "" : "disabled style='opacity: 0.5; cursor: not-allowed;'"}>✕ Smazat masku</button>
+              </div>
+              ${hasPoints ? `<div style="font-size: 10px; color: #a855f7; font-style: italic; margin-top: -2px;">Aktivní polygonální maska (přepisuje ořez níže)</div>` : ""}
+            </div>
+
+            <!-- Standard Crop Controls -->
+            <div class="row" style="margin-top: 10px; border-top: 1px solid rgba(148, 163, 184, 0.1); padding-top: 6px; ${hasPoints ? "opacity: 0.4; pointer-events: none;" : ""}">
+              <span style="font-weight: 600; color: #cbd5e1; font-size: 11px;">Ořez / Maska (CSS clip-path %)</span>
+            </div>
+            <div class="row" style="${hasPoints ? "opacity: 0.4; pointer-events: none;" : ""}">
+              <span>Ořez H (%)</span>
+              <input type="range" class="layer-clip-top" min="0" max="100" value="${layer.clipTop || 0}" step="1" />
+              <input type="number" class="layer-clip-top-num number-small" value="${layer.clipTop || 0}" min="0" max="100" step="1" />
+            </div>
+            <div class="row" style="${hasPoints ? "opacity: 0.4; pointer-events: none;" : ""}">
+              <span>Ořez P (%)</span>
+              <input type="range" class="layer-clip-right" min="0" max="100" value="${layer.clipRight || 0}" step="1" />
+              <input type="number" class="layer-clip-right-num number-small" value="${layer.clipRight || 0}" min="0" max="100" step="1" />
+            </div>
+            <div class="row" style="${hasPoints ? "opacity: 0.4; pointer-events: none;" : ""}">
+              <span>Ořez D (%)</span>
+              <input type="range" class="layer-clip-bottom" min="0" max="100" value="${layer.clipBottom || 0}" step="1" />
+              <input type="number" class="layer-clip-bottom-num number-small" value="${layer.clipBottom || 0}" min="0" max="100" step="1" />
+            </div>
+            <div class="row" style="${hasPoints ? "opacity: 0.4; pointer-events: none;" : ""}">
+              <span>Ořez L (%)</span>
+              <input type="range" class="layer-clip-left" min="0" max="100" value="${layer.clipLeft || 0}" step="1" />
+              <input type="number" class="layer-clip-left-num number-small" value="${layer.clipLeft || 0}" min="0" max="100" step="1" />
             </div>
           </div>
         `;
@@ -584,6 +654,7 @@
         const img = document.createElement("img");
         img.src = layer.src;
         img.className = "bg-layer";
+        img.dataset.layerId = layer.id;
         img.style.position = "absolute";
         img.style.top = "0";
         img.style.left = "0";
@@ -593,6 +664,18 @@
         
         const scale = layer.zoom / 100;
         img.style.transform = `translate(${layer.x}px, ${layer.y}px) scale(${scale})`;
+        
+        if (layer.points && layer.points.length >= 3) {
+          const pointsStr = layer.points.map(pt => `${pt.x}% ${pt.y}%`).join(", ");
+          img.style.clipPath = `polygon(${pointsStr})`;
+        } else {
+          const clipT = layer.clipTop || 0;
+          const clipR = layer.clipRight || 0;
+          const clipB = layer.clipBottom || 0;
+          const clipL = layer.clipLeft || 0;
+          img.style.clipPath = `inset(${clipT}% ${clipR}% ${clipB}% ${clipL}%)`;
+        }
+
         bgWrapper.appendChild(img);
       }
     }
@@ -622,6 +705,30 @@
       } else if (e.target.classList.contains("layer-y-number")) {
         layer.y = parseFloat(e.target.value) || 0;
         card.querySelector(".layer-y-range").value = clamp(layer.y, -1000, 1000);
+      } else if (e.target.classList.contains("layer-clip-top")) {
+        layer.clipTop = parseFloat(e.target.value);
+        card.querySelector(".layer-clip-top-num").value = layer.clipTop;
+      } else if (e.target.classList.contains("layer-clip-top-num")) {
+        layer.clipTop = clamp(parseFloat(e.target.value) || 0, 0, 100);
+        card.querySelector(".layer-clip-top").value = layer.clipTop;
+      } else if (e.target.classList.contains("layer-clip-right")) {
+        layer.clipRight = parseFloat(e.target.value);
+        card.querySelector(".layer-clip-right-num").value = layer.clipRight;
+      } else if (e.target.classList.contains("layer-clip-right-num")) {
+        layer.clipRight = clamp(parseFloat(e.target.value) || 0, 0, 100);
+        card.querySelector(".layer-clip-right").value = layer.clipRight;
+      } else if (e.target.classList.contains("layer-clip-bottom")) {
+        layer.clipBottom = parseFloat(e.target.value);
+        card.querySelector(".layer-clip-bottom-num").value = layer.clipBottom;
+      } else if (e.target.classList.contains("layer-clip-bottom-num")) {
+        layer.clipBottom = clamp(parseFloat(e.target.value) || 0, 0, 100);
+        card.querySelector(".layer-clip-bottom").value = layer.clipBottom;
+      } else if (e.target.classList.contains("layer-clip-left")) {
+        layer.clipLeft = parseFloat(e.target.value);
+        card.querySelector(".layer-clip-left-num").value = layer.clipLeft;
+      } else if (e.target.classList.contains("layer-clip-left-num")) {
+        layer.clipLeft = clamp(parseFloat(e.target.value) || 0, 0, 100);
+        card.querySelector(".layer-clip-left").value = layer.clipLeft;
       }
 
       renderBgLayers();
@@ -636,7 +743,12 @@
         name: `Vrstva ${layers.length + 1}`,
         zoom: 100,
         x: 0,
-        y: 0
+        y: 0,
+        clipTop: 0,
+        clipRight: 0,
+        clipBottom: 0,
+        clipLeft: 0,
+        points: []
       };
       layers.unshift(newLayer);
       renderLayerControls();
@@ -645,12 +757,13 @@
 
     const layersContainer = document.getElementById("layersContainer");
     
-    layersContainer.addEventListener("click", (e) => {
+    layersContainer.addEventListener("click", async (e) => {
       const card = e.target.closest(".layer-control-card");
       if (!card) return;
       const id = parseFloat(card.dataset.id);
       const idx = layers.findIndex(l => l.id === id);
       if (idx === -1) return;
+      const layer = layers[idx];
 
       if (e.target.closest(".move-up-btn")) {
         if (idx > 0) {
@@ -672,6 +785,38 @@
         layers.splice(idx, 1);
         renderLayerControls();
         renderBgLayers();
+      } else if (e.target.closest(".remove-bg-btn")) {
+        const btn = e.target.closest(".remove-bg-btn");
+        if (!layer.src) return;
+
+        btn.disabled = true;
+        btn.innerText = "⏳ Zpracovávám AI model... (cca 15s)";
+        btn.style.opacity = "0.7";
+        btn.style.cursor = "wait";
+
+        try {
+          const { default: removeBackground } = await import("https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.3/+esm");
+          const processedBlob = await removeBackground(layer.src);
+          layer.src = URL.createObjectURL(processedBlob);
+          layer.name = "[Bez pozadí] " + layer.name;
+          renderLayerControls();
+          renderBgLayers();
+        } catch (err) {
+          console.error(err);
+          alert("Chyba při odstraňování pozadí: " + err.message + "\nUjistěte se prosím, že máte stabilní připojení k internetu.");
+          renderLayerControls();
+        }
+      } else if (e.target.closest(".start-mask-btn")) {
+        if (!layer.src) return;
+        activeDrawingLayerId = layer.id;
+        drawingPoints = [];
+        document.getElementById("maskInstruction").style.display = "block";
+        previewRoot.style.cursor = "crosshair";
+        updateMaskDrawingSvg();
+      } else if (e.target.closest(".clear-mask-btn")) {
+        layer.points = [];
+        renderLayerControls();
+        renderBgLayers();
       }
     });
 
@@ -691,10 +836,147 @@
         reader.onload = (event) => {
           layer.src = event.target.result;
           layer.name = file.name;
+          layer.points = []; // reset mask
           renderLayerControls();
           renderBgLayers();
         };
         reader.readAsDataURL(file);
+      }
+    });
+
+    // Vector Mask Pen Drawing Logic
+    function updateMaskDrawingSvg() {
+      let svg = document.getElementById("maskDrawingSvg");
+      if (!svg) {
+        svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.id = "maskDrawingSvg";
+        svg.style.position = "absolute";
+        svg.style.top = "0";
+        svg.style.left = "0";
+        svg.style.width = "100%";
+        svg.style.height = "100%";
+        svg.style.pointerEvents = "none";
+        svg.style.zIndex = "90";
+        previewRoot.appendChild(svg);
+      }
+      svg.innerHTML = "";
+
+      if (drawingPoints.length === 0) return;
+
+      const img = bgWrapper.querySelector(`[data-layer-id="${activeDrawingLayerId}"]`);
+      if (!img) return;
+
+      const rectImg = img.getBoundingClientRect();
+      const rectPreview = previewRoot.getBoundingClientRect();
+
+      const imgLeftInPreview = rectImg.left - rectPreview.left;
+      const imgTopInPreview = rectImg.top - rectPreview.top;
+
+      const screenPoints = drawingPoints.map(pt => {
+        return {
+          x: imgLeftInPreview + (pt.x / 100) * rectImg.width,
+          y: imgTopInPreview + (pt.y / 100) * rectImg.height
+        };
+      });
+
+      // Draw dashed connecting path
+      if (screenPoints.length > 1) {
+        const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+        const pointsStr = screenPoints.map(p => `${p.x},${p.y}`).join(" ");
+        polyline.setAttribute("points", pointsStr);
+        polyline.setAttribute("fill", "none");
+        polyline.setAttribute("stroke", "#a855f7");
+        polyline.setAttribute("stroke-width", "2");
+        polyline.setAttribute("stroke-dasharray", "4");
+        svg.appendChild(polyline);
+      }
+
+      // Draw anchor point handles
+      screenPoints.forEach((p, idx) => {
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", p.x);
+        circle.setAttribute("cy", p.y);
+        circle.setAttribute("r", idx === 0 ? "6" : "4");
+        circle.setAttribute("fill", idx === 0 ? "#22c55e" : "#a855f7"); // green for start, purple for others
+        circle.setAttribute("stroke", "#fff");
+        circle.setAttribute("stroke-width", "1");
+        svg.appendChild(circle);
+      });
+    }
+
+    function finishMaskDrawing() {
+      if (drawingPoints.length < 3) {
+        alert("Maska z pera musí mít alespoň 3 body.");
+        return;
+      }
+      const layer = layers.find(l => l.id === activeDrawingLayerId);
+      if (layer) {
+        layer.points = [...drawingPoints];
+        renderLayerControls();
+        renderBgLayers();
+      }
+      cancelMaskDrawing();
+    }
+
+    function cancelMaskDrawing() {
+      activeDrawingLayerId = null;
+      drawingPoints = [];
+      const svg = document.getElementById("maskDrawingSvg");
+      if (svg) svg.remove();
+      document.getElementById("maskInstruction").style.display = "none";
+      previewRoot.style.cursor = "";
+    }
+
+    previewRoot.addEventListener("click", (e) => {
+      if (activeDrawingLayerId === null) return;
+
+      if (e.target.closest("#btnFinishMask") || e.target.closest("#btnCancelMask")) {
+        return;
+      }
+
+      const img = bgWrapper.querySelector(`[data-layer-id="${activeDrawingLayerId}"]`);
+      if (!img) return;
+
+      const rectImg = img.getBoundingClientRect();
+      const rectPreview = previewRoot.getBoundingClientRect();
+
+      const x = ((e.clientX - rectImg.left) / rectImg.width) * 100;
+      const y = ((e.clientY - rectImg.top) / rectImg.height) * 100;
+
+      // Close path if clicking near first point
+      if (drawingPoints.length > 2) {
+        const firstPt = drawingPoints[0];
+        const imgLeftInPreview = rectImg.left - rectPreview.left;
+        const imgTopInPreview = rectImg.top - rectPreview.top;
+        const firstScreenX = imgLeftInPreview + (firstPt.x / 100) * rectImg.width;
+        const firstScreenY = imgTopInPreview + (firstPt.y / 100) * rectImg.height;
+        const dist = Math.hypot(e.clientX - rectPreview.left - firstScreenX, e.clientY - rectPreview.top - firstScreenY);
+        if (dist < 12) {
+          finishMaskDrawing();
+          return;
+        }
+      }
+
+      drawingPoints.push({ x, y });
+      updateMaskDrawingSvg();
+    });
+
+    document.getElementById("btnFinishMask").addEventListener("click", (e) => {
+      e.stopPropagation();
+      finishMaskDrawing();
+    });
+
+    document.getElementById("btnCancelMask").addEventListener("click", (e) => {
+      e.stopPropagation();
+      cancelMaskDrawing();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (activeDrawingLayerId === null) return;
+      if (e.key === "Enter") {
+        finishMaskDrawing();
+      } else if (e.key === "Escape") {
+        cancelMaskDrawing();
       }
     });
 
