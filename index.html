@@ -28,12 +28,14 @@
       flex-direction: row;
       gap: 24px;
       width: 100%;
-      max-width: 1200px;
+      max-width: 1600px;
     }
-    @media (max-width: 900px) { .app { flex-direction: column; } }
+    @media (max-width: 1200px) {
+      .app { flex-direction: column; }
+    }
 
     .panel {
-      flex: 1;
+      flex: 0 0 350px;
       background: #020617;
       border-radius: 16px;
       padding: 16px 18px;
@@ -43,6 +45,12 @@
       gap: 14px;
       max-height: calc(100vh - 48px);
       overflow: auto;
+    }
+    .main-panel {
+      flex: 0 0 380px;
+    }
+    .settings-panel {
+      flex: 0 0 350px;
     }
     .panel h1 { margin: 0 0 4px; font-size: 20px; }
     label {
@@ -116,12 +124,14 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+      align-items: center;
     }
     .preview-label {
       font-size: 13px;
       text-transform: uppercase;
       letter-spacing: 0.16em;
       color: #94a3b8;
+      align-self: flex-start;
     }
 
     /* Preview = přesně to, co se exportuje (bez rounded corners, bez borderu) */
@@ -129,7 +139,6 @@
       position: relative;
       width: 720px;
       height: 900px;
-      margin-left: auto;
       background: #000;
       overflow: hidden;
     }
@@ -246,34 +255,6 @@
       background: rgba(255, 255, 255, 0.1);
       border-color: rgba(148, 163, 184, 0.6);
     }
-    .layer-control-card {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
-    .layer-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
-      padding-bottom: 6px;
-    }
-    .layer-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: #cbd5e1;
-      max-width: 160px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .layer-actions {
-      display: flex;
-      gap: 6px;
-    }
     .btn-icon {
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid rgba(148, 163, 184, 0.2);
@@ -298,11 +279,57 @@
     .btn-icon.delete-btn:hover {
       background: rgba(239, 68, 68, 0.1);
     }
+
+    /* Compact layer list item styling */
+    .layer-list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+    .layer-list-item:hover {
+      background: rgba(148, 163, 184, 0.15);
+      border-color: rgba(148, 163, 184, 0.4);
+    }
+    .layer-list-item.selected {
+      border-color: #a855f7;
+      background: rgba(168, 85, 247, 0.15);
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.1);
+    }
+    .layer-list-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
+    }
+    .layer-list-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .layer-list-status {
+      font-size: 10px;
+      color: #64748b;
+    }
+    .layer-list-item.selected .layer-list-status {
+      color: #c084fc;
+    }
   </style>
 </head>
 <body>
   <div class="app">
-    <div class="panel">
+    <!-- Left Column: Main panel containing text, overlay and layers list -->
+    <div class="panel main-panel">
       <h1>NOSCOPE post generator</h1>
 
       <div>
@@ -340,7 +367,7 @@
       <div>
         <label>Vrstvy fotek na pozadí (max 4)</label>
         <button id="addLayerBtn" type="button" class="add-layer-btn">+ Přidat vrstvu fotky</button>
-        <div id="layersContainer"></div>
+        <div id="layersListContainer"></div>
       </div>
 
       <button id="downloadBtn">⬇️ Stáhnout PNG (1440×1800)</button>
@@ -350,6 +377,7 @@
       </div>
     </div>
 
+    <!-- Center Column: Preview -->
     <div class="preview-wrapper">
       <div class="preview-label">Náhled Instagram postu</div>
 
@@ -367,6 +395,12 @@
         <img id="overlayImage" class="preview-layer" src="overlay.png" alt="Overlay" />
         <div id="headlinePreview"></div>
       </div>
+    </div>
+
+    <!-- Right Column: Settings Panel for the active layer -->
+    <div class="panel settings-panel" id="settingsPanel">
+      <h2 style="margin: 0 0 4px; font-size: 18px; color: #cbd5e1; border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding-bottom: 8px;">Vlastnosti vrstvy</h2>
+      <div id="activeLayerSettings"></div>
     </div>
   </div>
 
@@ -526,23 +560,25 @@
     // State parameters for Drawing Mode
     let activeDrawingLayerId = null;
     let drawingPoints = [];
+    let activeLayerId = null;
 
     // Multi-layer backgrounds configuration
     let layers = [
       {
         id: Date.now(),
         src: "",
+        originalSrc: "",
         name: "Vrstva 1",
         zoom: 100,
         x: 0,
         y: 0,
-        clipTop: 0,
-        clipRight: 0,
-        clipBottom: 0,
-        clipLeft: 0,
+        feather: 0,
         points: []
       }
     ];
+
+    // Set default active layer
+    activeLayerId = layers[0].id;
 
     function clamp(val, min, max) {
       return Math.min(max, Math.max(min, val));
@@ -563,86 +599,193 @@
       }
     }
 
-    function renderLayerControls() {
-      const layersContainer = document.getElementById("layersContainer");
-      layersContainer.innerHTML = "";
+    // Dynamic Masking and Feathering Canvas Preprocessing
+    function processLayerImage(layer, callback) {
+      if (!layer.originalSrc) {
+        if (callback) callback();
+        return;
+      }
+
+      if (layer.originalImageObj && layer.originalImageObj.src === layer.originalSrc) {
+        runCanvasProcessing(layer, callback);
+        return;
+      }
+
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        layer.originalImageObj = img;
+        runCanvasProcessing(layer, callback);
+      };
+      img.src = layer.originalSrc;
+    }
+
+    function runCanvasProcessing(layer, callback) {
+      const img = layer.originalImageObj;
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+
+      ctx.drawImage(img, 0, 0);
+
+      const featherPx = layer.feather || 0;
+
+      if (layer.points && layer.points.length >= 3) {
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width = canvas.width;
+        maskCanvas.height = canvas.height;
+        const maskCtx = maskCanvas.getContext("2d");
+
+        maskCtx.fillStyle = "black";
+        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+        maskCtx.fillStyle = "white";
+        maskCtx.beginPath();
+        layer.points.forEach((pt, idx) => {
+          const pxX = (pt.x / 100) * maskCanvas.width;
+          const pxY = (pt.y / 100) * maskCanvas.height;
+          if (idx === 0) maskCtx.moveTo(pxX, pxY);
+          else maskCtx.lineTo(pxX, pxY);
+        });
+        maskCtx.closePath();
+        maskCtx.fill();
+
+        if (featherPx > 0) {
+          const blurCanvas = document.createElement("canvas");
+          blurCanvas.width = canvas.width;
+          blurCanvas.height = canvas.height;
+          const blurCtx = blurCanvas.getContext("2d");
+          blurCtx.filter = `blur(${featherPx}px)`;
+          blurCtx.drawImage(maskCanvas, 0, 0);
+
+          ctx.globalCompositeOperation = "destination-in";
+          ctx.drawImage(blurCanvas, 0, 0);
+        } else {
+          ctx.globalCompositeOperation = "destination-in";
+          ctx.drawImage(maskCanvas, 0, 0);
+        }
+      } else if (featherPx > 0) {
+        // Feather standard alpha cutout edges (e.g. AI background removed image)
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width = canvas.width;
+        maskCanvas.height = canvas.height;
+        const maskCtx = maskCanvas.getContext("2d");
+
+        maskCtx.fillStyle = "black";
+        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+        maskCtx.drawImage(img, 0, 0);
+        maskCtx.globalCompositeOperation = "source-in";
+        maskCtx.fillStyle = "white";
+        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+        const blurCanvas = document.createElement("canvas");
+        blurCanvas.width = canvas.width;
+        blurCanvas.height = canvas.height;
+        const blurCtx = blurCanvas.getContext("2d");
+        blurCtx.filter = `blur(${featherPx}px)`;
+        blurCtx.fillStyle = "black";
+        blurCtx.fillRect(0, 0, blurCanvas.width, blurCanvas.height);
+        blurCtx.drawImage(maskCanvas, 0, 0);
+
+        ctx.globalCompositeOperation = "destination-in";
+        ctx.drawImage(blurCanvas, 0, 0);
+      }
+
+      layer.src = canvas.toDataURL();
+      if (callback) callback();
+    }
+
+    function renderLayerList() {
+      const listContainer = document.getElementById("layersListContainer");
+      listContainer.innerHTML = "";
 
       layers.forEach((layer, idx) => {
-        const card = document.createElement("div");
-        card.className = "layer-control-card";
-        card.dataset.id = layer.id;
+        const item = document.createElement("div");
+        item.className = `layer-list-item ${layer.id === activeLayerId ? "selected" : ""}`;
+        item.dataset.id = layer.id;
 
-        const hasPoints = layer.points && layer.points.length > 0;
+        const hasImage = !!layer.originalSrc;
+        const statusText = hasImage ? "Nahraná fotka" : "Bez fotky";
 
-        card.innerHTML = `
-          <div class="layer-header">
-            <span class="layer-title" title="${layer.name}">${layer.name}</span>
-            <div class="layer-actions">
-              <button type="button" class="btn-icon move-up-btn" title="Posunout nahoru" ${idx === 0 ? "disabled style='opacity: 0.3; cursor: not-allowed;'" : ""}>▲</button>
-              <button type="button" class="btn-icon move-down-btn" title="Posunout dolů" ${idx === layers.length - 1 ? "disabled style='opacity: 0.3; cursor: not-allowed;'" : ""}>▼</button>
-              <button type="button" class="btn-icon delete-btn" title="Smazat vrstvu">🗑</button>
-            </div>
+        item.innerHTML = `
+          <div class="layer-list-info">
+            <span class="layer-list-name" title="${layer.name}">${layer.name}</span>
+            <span class="layer-list-status">${statusText}</span>
           </div>
-          <div class="layer-body">
-            <input type="file" class="layer-file-input" accept="image/*" style="margin-bottom: 10px;" />
-            <button type="button" class="btn-icon remove-bg-btn" style="margin-bottom: 12px; width: 100%; justify-content: center; background: linear-gradient(90deg, #ec4899, #a855f7); border: none; font-weight: 600;" ${layer.src ? "" : "disabled style='opacity: 0.5; cursor: not-allowed;'"}>✨ Odebrat pozadí (AI)</button>
-            
-            <div class="row">
-              <span>Zoom (%)</span>
-              <input type="range" class="layer-zoom-range" min="10" max="400" value="${layer.zoom}" step="1" />
-              <input type="number" class="layer-zoom-number number-small" value="${layer.zoom}" step="1" min="10" max="400" />
-            </div>
-            <div class="row">
-              <span>Posun X (px)</span>
-              <input type="range" class="layer-x-range" min="-1000" max="1000" value="${layer.x}" step="1" />
-              <input type="number" class="layer-x-number number-small" value="${layer.x}" step="1" />
-            </div>
-            <div class="row">
-              <span>Posun Y (px)</span>
-              <input type="range" class="layer-y-range" min="-1000" max="1000" value="${layer.y}" step="1" />
-              <input type="number" class="layer-y-number number-small" value="${layer.y}" step="1" />
-            </div>
-            
-            <!-- Pen Mask Controls -->
-            <div class="row" style="margin-top: 10px; border-top: 1px solid rgba(148, 163, 184, 0.1); padding-top: 6px; display: flex; flex-direction: column; gap: 6px;">
-              <span style="font-weight: 600; color: #cbd5e1; font-size: 11px;">Maska pera (Pen Tool 🖋️)</span>
-              <div style="display: flex; gap: 6px; width: 100%;">
-                <button type="button" class="btn-icon start-mask-btn" style="flex: 1; justify-content: center; background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.4);" ${layer.src ? "" : "disabled style='opacity: 0.5; cursor: not-allowed;'"}>🖋️ Kreslit masku</button>
-                <button type="button" class="btn-icon clear-mask-btn" style="flex: 1; justify-content: center; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" ${hasPoints ? "" : "disabled style='opacity: 0.5; cursor: not-allowed;'"}>✕ Smazat masku</button>
-              </div>
-              ${hasPoints ? `<div style="font-size: 10px; color: #a855f7; font-style: italic; margin-top: -2px;">Aktivní polygonální maska (přepisuje ořez níže)</div>` : ""}
-            </div>
-
-            <!-- Standard Crop Controls -->
-            <div class="row" style="margin-top: 10px; border-top: 1px solid rgba(148, 163, 184, 0.1); padding-top: 6px; ${hasPoints ? "opacity: 0.4; pointer-events: none;" : ""}">
-              <span style="font-weight: 600; color: #cbd5e1; font-size: 11px;">Ořez / Maska (CSS clip-path %)</span>
-            </div>
-            <div class="row" style="${hasPoints ? "opacity: 0.4; pointer-events: none;" : ""}">
-              <span>Ořez H (%)</span>
-              <input type="range" class="layer-clip-top" min="0" max="100" value="${layer.clipTop || 0}" step="1" />
-              <input type="number" class="layer-clip-top-num number-small" value="${layer.clipTop || 0}" min="0" max="100" step="1" />
-            </div>
-            <div class="row" style="${hasPoints ? "opacity: 0.4; pointer-events: none;" : ""}">
-              <span>Ořez P (%)</span>
-              <input type="range" class="layer-clip-right" min="0" max="100" value="${layer.clipRight || 0}" step="1" />
-              <input type="number" class="layer-clip-right-num number-small" value="${layer.clipRight || 0}" min="0" max="100" step="1" />
-            </div>
-            <div class="row" style="${hasPoints ? "opacity: 0.4; pointer-events: none;" : ""}">
-              <span>Ořez D (%)</span>
-              <input type="range" class="layer-clip-bottom" min="0" max="100" value="${layer.clipBottom || 0}" step="1" />
-              <input type="number" class="layer-clip-bottom-num number-small" value="${layer.clipBottom || 0}" min="0" max="100" step="1" />
-            </div>
-            <div class="row" style="${hasPoints ? "opacity: 0.4; pointer-events: none;" : ""}">
-              <span>Ořez L (%)</span>
-              <input type="range" class="layer-clip-left" min="0" max="100" value="${layer.clipLeft || 0}" step="1" />
-              <input type="number" class="layer-clip-left-num number-small" value="${layer.clipLeft || 0}" min="0" max="100" step="1" />
-            </div>
+          <div class="layer-actions" style="margin-left: 10px;">
+            <button type="button" class="btn-icon move-up-btn" title="Posunout nahoru" ${idx === 0 ? "disabled style='opacity: 0.3; cursor: not-allowed;'" : ""}>▲</button>
+            <button type="button" class="btn-icon move-down-btn" title="Posunout dolů" ${idx === layers.length - 1 ? "disabled style='opacity: 0.3; cursor: not-allowed;'" : ""}>▼</button>
+            <button type="button" class="btn-icon delete-btn" title="Smazat vrstvu">🗑</button>
           </div>
         `;
-        layersContainer.appendChild(card);
+        listContainer.appendChild(item);
       });
 
       updateAddButtonState();
+    }
+
+    function renderActiveLayerSettings() {
+      const settingsContainer = document.getElementById("activeLayerSettings");
+      settingsContainer.innerHTML = "";
+
+      const layer = layers.find(l => l.id === activeLayerId);
+      if (!layer) {
+        settingsContainer.innerHTML = `
+          <div style="text-align: center; color: #64748b; padding-top: 40px; font-style: italic;">
+            Vyberte vrstvu na levé straně pro její úpravu.
+          </div>
+        `;
+        return;
+      }
+
+      const hasPoints = layer.points && layer.points.length > 0;
+
+      const html = `
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div>
+            <label style="margin-bottom: 6px;">Zdrojový obrázek</label>
+            <input type="file" class="layer-file-input" accept="image/*" style="margin-bottom: 8px; width: 100%;" />
+            <span class="hint" style="display: block; margin-top: -4px; margin-bottom: 10px; font-size: 11px;">(Můžete také vložit obrázek ze schránky přes Ctrl+V)</span>
+            <button type="button" class="btn-icon remove-bg-btn" style="margin-bottom: 4px; width: 100%; justify-content: center; background: linear-gradient(90deg, #ec4899, #a855f7); border: none; font-weight: 600; padding: 8px 12px; border-radius: 8px;" ${layer.originalSrc ? "" : "disabled style='opacity: 0.5; cursor: not-allowed;'"}>✨ Odebrat pozadí (AI)</button>
+          </div>
+
+          <div class="row">
+            <span>Zoom (%)</span>
+            <input type="range" class="layer-zoom-range" min="10" max="400" value="${layer.zoom}" step="1" />
+            <input type="number" class="layer-zoom-number number-small" value="${layer.zoom}" step="1" min="10" max="400" />
+          </div>
+          <div class="row">
+            <span>Posun X (px)</span>
+            <input type="range" class="layer-x-range" min="-1000" max="1000" value="${layer.x}" step="1" />
+            <input type="number" class="layer-x-number number-small" value="${layer.x}" step="1" />
+          </div>
+          <div class="row">
+            <span>Posun Y (px)</span>
+            <input type="range" class="layer-y-range" min="-1000" max="1000" value="${layer.y}" step="1" />
+            <input type="number" class="layer-y-number number-small" value="${layer.y}" step="1" />
+          </div>
+          
+          <!-- Pen Mask Controls -->
+          <div class="row" style="margin-top: 10px; border-top: 1px solid rgba(148, 163, 184, 0.1); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-weight: 600; color: #cbd5e1; font-size: 11px;">Maska pera (Pen Tool 🖋️)</span>
+            <div style="display: flex; gap: 6px; width: 100%;">
+              <button type="button" class="btn-icon start-mask-btn" style="flex: 1; justify-content: center; background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.4);" ${layer.originalSrc ? "" : "disabled style='opacity: 0.5; cursor: not-allowed;'"}>🖋️ Kreslit masku</button>
+              <button type="button" class="btn-icon clear-mask-btn" style="flex: 1; justify-content: center; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" ${hasPoints ? "" : "disabled style='opacity: 0.5; cursor: not-allowed;'"}>✕ Smazat masku</button>
+            </div>
+            ${hasPoints ? `<div style="font-size: 10px; color: #a855f7; font-style: italic; margin-top: 2px;">Aktivní polygonální maska</div>` : ""}
+          </div>
+
+          <!-- Feather Controls -->
+          <div class="row" style="margin-top: 10px; border-top: 1px solid rgba(148, 163, 184, 0.1); padding-top: 10px;">
+            <span>Rozpijení okrajů (Feather px)</span>
+            <input type="range" class="layer-feather-range" min="0" max="50" value="${layer.feather || 0}" step="1" />
+            <input type="number" class="layer-feather-number number-small" value="${layer.feather || 0}" min="0" max="50" step="1" />
+          </div>
+        </div>
+      `;
+      settingsContainer.innerHTML = html;
     }
 
     function renderBgLayers() {
@@ -665,73 +808,8 @@
         const scale = layer.zoom / 100;
         img.style.transform = `translate(${layer.x}px, ${layer.y}px) scale(${scale})`;
         
-        if (layer.points && layer.points.length >= 3) {
-          const pointsStr = layer.points.map(pt => `${pt.x}% ${pt.y}%`).join(", ");
-          img.style.clipPath = `polygon(${pointsStr})`;
-        } else {
-          const clipT = layer.clipTop || 0;
-          const clipR = layer.clipRight || 0;
-          const clipB = layer.clipBottom || 0;
-          const clipL = layer.clipLeft || 0;
-          img.style.clipPath = `inset(${clipT}% ${clipR}% ${clipB}% ${clipL}%)`;
-        }
-
         bgWrapper.appendChild(img);
       }
-    }
-
-    function handleLayerInput(e) {
-      const card = e.target.closest(".layer-control-card");
-      if (!card) return;
-      const id = parseFloat(card.dataset.id);
-      const layer = layers.find(l => l.id === id);
-      if (!layer) return;
-
-      if (e.target.classList.contains("layer-zoom-range")) {
-        layer.zoom = parseFloat(e.target.value);
-        card.querySelector(".layer-zoom-number").value = layer.zoom;
-      } else if (e.target.classList.contains("layer-zoom-number")) {
-        layer.zoom = parseFloat(e.target.value) || 10;
-        card.querySelector(".layer-zoom-range").value = clamp(layer.zoom, 10, 400);
-      } else if (e.target.classList.contains("layer-x-range")) {
-        layer.x = parseFloat(e.target.value);
-        card.querySelector(".layer-x-number").value = layer.x;
-      } else if (e.target.classList.contains("layer-x-number")) {
-        layer.x = parseFloat(e.target.value) || 0;
-        card.querySelector(".layer-x-range").value = clamp(layer.x, -1000, 1000);
-      } else if (e.target.classList.contains("layer-y-range")) {
-        layer.y = parseFloat(e.target.value);
-        card.querySelector(".layer-y-number").value = layer.y;
-      } else if (e.target.classList.contains("layer-y-number")) {
-        layer.y = parseFloat(e.target.value) || 0;
-        card.querySelector(".layer-y-range").value = clamp(layer.y, -1000, 1000);
-      } else if (e.target.classList.contains("layer-clip-top")) {
-        layer.clipTop = parseFloat(e.target.value);
-        card.querySelector(".layer-clip-top-num").value = layer.clipTop;
-      } else if (e.target.classList.contains("layer-clip-top-num")) {
-        layer.clipTop = clamp(parseFloat(e.target.value) || 0, 0, 100);
-        card.querySelector(".layer-clip-top").value = layer.clipTop;
-      } else if (e.target.classList.contains("layer-clip-right")) {
-        layer.clipRight = parseFloat(e.target.value);
-        card.querySelector(".layer-clip-right-num").value = layer.clipRight;
-      } else if (e.target.classList.contains("layer-clip-right-num")) {
-        layer.clipRight = clamp(parseFloat(e.target.value) || 0, 0, 100);
-        card.querySelector(".layer-clip-right").value = layer.clipRight;
-      } else if (e.target.classList.contains("layer-clip-bottom")) {
-        layer.clipBottom = parseFloat(e.target.value);
-        card.querySelector(".layer-clip-bottom-num").value = layer.clipBottom;
-      } else if (e.target.classList.contains("layer-clip-bottom-num")) {
-        layer.clipBottom = clamp(parseFloat(e.target.value) || 0, 0, 100);
-        card.querySelector(".layer-clip-bottom").value = layer.clipBottom;
-      } else if (e.target.classList.contains("layer-clip-left")) {
-        layer.clipLeft = parseFloat(e.target.value);
-        card.querySelector(".layer-clip-left-num").value = layer.clipLeft;
-      } else if (e.target.classList.contains("layer-clip-left-num")) {
-        layer.clipLeft = clamp(parseFloat(e.target.value) || 0, 0, 100);
-        card.querySelector(".layer-clip-left").value = layer.clipLeft;
-      }
-
-      renderBgLayers();
     }
 
     const addLayerBtn = document.getElementById("addLayerBtn");
@@ -740,54 +818,139 @@
       const newLayer = {
         id: Date.now() + Math.random(),
         src: "",
+        originalSrc: "",
         name: `Vrstva ${layers.length + 1}`,
         zoom: 100,
         x: 0,
         y: 0,
-        clipTop: 0,
-        clipRight: 0,
-        clipBottom: 0,
-        clipLeft: 0,
+        feather: 0,
         points: []
       };
       layers.unshift(newLayer);
-      renderLayerControls();
+      activeLayerId = newLayer.id; // Auto-select newly added layer
+      renderLayerList();
+      renderActiveLayerSettings();
       renderBgLayers();
     });
 
-    const layersContainer = document.getElementById("layersContainer");
+    const layersListContainer = document.getElementById("layersListContainer");
     
-    layersContainer.addEventListener("click", async (e) => {
-      const card = e.target.closest(".layer-control-card");
-      if (!card) return;
-      const id = parseFloat(card.dataset.id);
+    layersListContainer.addEventListener("click", (e) => {
+      const item = e.target.closest(".layer-list-item");
+      if (!item) return;
+      const id = parseFloat(item.dataset.id);
       const idx = layers.findIndex(l => l.id === id);
       if (idx === -1) return;
-      const layer = layers[idx];
 
       if (e.target.closest(".move-up-btn")) {
+        e.stopPropagation();
         if (idx > 0) {
           const temp = layers[idx];
           layers[idx] = layers[idx - 1];
           layers[idx - 1] = temp;
-          renderLayerControls();
+          renderLayerList();
           renderBgLayers();
         }
       } else if (e.target.closest(".move-down-btn")) {
+        e.stopPropagation();
         if (idx < layers.length - 1) {
           const temp = layers[idx];
           layers[idx] = layers[idx + 1];
           layers[idx + 1] = temp;
-          renderLayerControls();
+          renderLayerList();
           renderBgLayers();
         }
       } else if (e.target.closest(".delete-btn")) {
+        e.stopPropagation();
         layers.splice(idx, 1);
-        renderLayerControls();
+        if (activeLayerId === id) {
+          activeLayerId = layers.length > 0 ? layers[0].id : null;
+        }
+        renderLayerList();
+        renderActiveLayerSettings();
         renderBgLayers();
-      } else if (e.target.closest(".remove-bg-btn")) {
+      } else {
+        // Selection click
+        activeLayerId = id;
+        renderLayerList();
+        renderActiveLayerSettings();
+      }
+    });
+
+    const activeLayerSettings = document.getElementById("activeLayerSettings");
+
+    // Input settings (Zoom, X, Y, Feather ranges and numbers)
+    activeLayerSettings.addEventListener("input", (e) => {
+      const layer = layers.find(l => l.id === activeLayerId);
+      if (!layer) return;
+
+      if (e.target.classList.contains("layer-zoom-range")) {
+        layer.zoom = parseFloat(e.target.value);
+        activeLayerSettings.querySelector(".layer-zoom-number").value = layer.zoom;
+      } else if (e.target.classList.contains("layer-zoom-number")) {
+        layer.zoom = parseFloat(e.target.value) || 10;
+        activeLayerSettings.querySelector(".layer-zoom-range").value = clamp(layer.zoom, 10, 400);
+      } else if (e.target.classList.contains("layer-x-range")) {
+        layer.x = parseFloat(e.target.value);
+        activeLayerSettings.querySelector(".layer-x-number").value = layer.x;
+      } else if (e.target.classList.contains("layer-x-number")) {
+        layer.x = parseFloat(e.target.value) || 0;
+        activeLayerSettings.querySelector(".layer-x-range").value = clamp(layer.x, -1000, 1000);
+      } else if (e.target.classList.contains("layer-y-range")) {
+        layer.y = parseFloat(e.target.value);
+        activeLayerSettings.querySelector(".layer-y-number").value = layer.y;
+      } else if (e.target.classList.contains("layer-y-number")) {
+        layer.y = parseFloat(e.target.value) || 0;
+        activeLayerSettings.querySelector(".layer-y-range").value = clamp(layer.y, -1000, 1000);
+      } else if (e.target.classList.contains("layer-feather-range")) {
+        layer.feather = parseFloat(e.target.value);
+        activeLayerSettings.querySelector(".layer-feather-number").value = layer.feather;
+        processLayerImage(layer, () => {
+          renderBgLayers();
+        });
+      } else if (e.target.classList.contains("layer-feather-number")) {
+        layer.feather = clamp(parseFloat(e.target.value) || 0, 0, 50);
+        activeLayerSettings.querySelector(".layer-feather-range").value = layer.feather;
+        processLayerImage(layer, () => {
+          renderBgLayers();
+        });
+      }
+
+      renderBgLayers();
+    });
+
+    // File Input change
+    activeLayerSettings.addEventListener("change", (e) => {
+      if (e.target.classList.contains("layer-file-input")) {
+        const layer = layers.find(l => l.id === activeLayerId);
+        if (!layer) return;
+
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          layer.originalSrc = event.target.result;
+          layer.originalImageObj = null; // Clear cached image
+          layer.points = [];
+          layer.feather = 0;
+          processLayerImage(layer, () => {
+            renderLayerList();
+            renderActiveLayerSettings();
+            renderBgLayers();
+          });
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Buttons click
+    activeLayerSettings.addEventListener("click", async (e) => {
+      const layer = layers.find(l => l.id === activeLayerId);
+      if (!layer) return;
+
+      if (e.target.closest(".remove-bg-btn")) {
         const btn = e.target.closest(".remove-bg-btn");
-        if (!layer.src) return;
+        if (!layer.originalSrc) return;
 
         btn.disabled = true;
         btn.innerText = "⏳ Zpracovávám AI model... (cca 15s)";
@@ -800,18 +963,22 @@
           if (typeof removeBackground !== "function") {
             throw new Error("Funkce removeBackground nebyla v modulu nalezena.");
           }
-          const processedBlob = await removeBackground(layer.src);
-          layer.src = URL.createObjectURL(processedBlob);
+          const processedBlob = await removeBackground(layer.originalSrc);
+          layer.originalSrc = URL.createObjectURL(processedBlob);
+          layer.originalImageObj = null; // Clear cached image
           layer.name = "[Bez pozadí] " + layer.name;
-          renderLayerControls();
-          renderBgLayers();
+          processLayerImage(layer, () => {
+            renderLayerList();
+            renderActiveLayerSettings();
+            renderBgLayers();
+          });
         } catch (err) {
           console.error(err);
           alert("Chyba při odstraňování pozadí: " + err.message + "\nUjistěte se prosím, že máte stabilní připojení k internetu.");
-          renderLayerControls();
+          renderActiveLayerSettings();
         }
       } else if (e.target.closest(".start-mask-btn")) {
-        if (!layer.src) return;
+        if (!layer.originalSrc) return;
         activeDrawingLayerId = layer.id;
         drawingPoints = [];
         document.getElementById("maskInstruction").style.display = "block";
@@ -819,32 +986,10 @@
         updateMaskDrawingSvg();
       } else if (e.target.closest(".clear-mask-btn")) {
         layer.points = [];
-        renderLayerControls();
-        renderBgLayers();
-      }
-    });
-
-    layersContainer.addEventListener("input", handleLayerInput);
-
-    layersContainer.addEventListener("change", (e) => {
-      if (e.target.classList.contains("layer-file-input")) {
-        const card = e.target.closest(".layer-control-card");
-        if (!card) return;
-        const id = parseFloat(card.dataset.id);
-        const layer = layers.find(l => l.id === id);
-        if (!layer) return;
-
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          layer.src = event.target.result;
-          layer.name = file.name;
-          layer.points = []; // reset mask
-          renderLayerControls();
+        processLayerImage(layer, () => {
+          renderActiveLayerSettings();
           renderBgLayers();
-        };
-        reader.readAsDataURL(file);
+        });
       }
     });
 
@@ -916,7 +1061,7 @@
       const layer = layers.find(l => l.id === activeDrawingLayerId);
       if (layer) {
         layer.points = [...drawingPoints];
-        renderLayerControls();
+        renderActiveLayerSettings();
         renderBgLayers();
       }
       cancelMaskDrawing();
@@ -984,8 +1129,59 @@
       }
     });
 
+    // Clipboard paste support (Ctrl+V)
+    window.addEventListener("paste", (e) => {
+      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (const item of items) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            let layer = layers.find(l => l.id === activeLayerId);
+
+            // Reuse active layer if it has no image yet, otherwise create a new layer
+            if (!layer || layer.originalSrc) {
+              if (layers.length >= 4) {
+                alert("Nelze vložit obrázek ze schránky, byl dosažen limit 4 vrstev.");
+                return;
+              }
+              const newLayer = {
+                id: Date.now() + Math.random(),
+                src: "",
+                originalSrc: "",
+                name: `Vrstva ${layers.length + 1}`,
+                zoom: 100,
+                x: 0,
+                y: 0,
+                feather: 0,
+                points: []
+              };
+              layers.unshift(newLayer);
+              activeLayerId = newLayer.id;
+              layer = newLayer;
+            }
+
+            layer.originalSrc = event.target.result;
+            layer.originalImageObj = null;
+            layer.name = file.name || `Vložený obrázek (${layers.length})`;
+            layer.points = [];
+            layer.feather = 0;
+            processLayerImage(layer, () => {
+              renderLayerList();
+              renderActiveLayerSettings();
+              renderBgLayers();
+            });
+          };
+          reader.readAsDataURL(file);
+          e.preventDefault();
+          break;
+        }
+      }
+    });
+
     // Start initialization
-    renderLayerControls();
+    renderLayerList();
+    renderActiveLayerSettings();
     renderBgLayers();
 
     // EXPORT 1440×1800 – snímáme přímo previewRoot
