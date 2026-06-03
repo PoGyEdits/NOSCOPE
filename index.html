@@ -612,10 +612,20 @@
       }
 
       const img = new Image();
-      img.crossOrigin = "anonymous";
+      // Only set crossOrigin for remote http/https URLs to prevent WebView/Safari data URL loading failures
+      if (layer.originalSrc.startsWith("http://") || layer.originalSrc.startsWith("https://")) {
+        img.crossOrigin = "anonymous";
+      }
+      
       img.onload = () => {
         layer.originalImageObj = img;
         runCanvasProcessing(layer, callback);
+      };
+      img.onerror = (err) => {
+        console.error("Chyba při načítání obrázku:", err);
+        // Fallback: use raw source if processing fails
+        layer.src = layer.originalSrc;
+        if (callback) callback();
       };
       img.src = layer.originalSrc;
     }
@@ -931,6 +941,7 @@
         reader.onload = (event) => {
           layer.originalSrc = event.target.result;
           layer.originalImageObj = null; // Clear cached image
+          layer.name = file.name; // Keep the actual filename!
           layer.points = [];
           layer.feather = 0;
           processLayerImage(layer, () => {
@@ -1131,6 +1142,11 @@
 
     // Clipboard paste support (Ctrl+V)
     window.addEventListener("paste", (e) => {
+      // If user is currently focused on a text input or textarea, don't intercept paste
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+        return;
+      }
+
       const items = (e.clipboardData || e.originalEvent.clipboardData).items;
       for (const item of items) {
         if (item.kind === "file" && item.type.startsWith("image/")) {
